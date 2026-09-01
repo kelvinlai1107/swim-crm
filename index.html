@@ -665,22 +665,22 @@ function mgmtRenderList(){
   storeList.forEach(function(e){ allUsers.push({email:e, role:"store"}); });
 
   var html = "";
-  if(!allUsers.length){ html = "<div style='text-align:center;color:var(--tx3);padding:16px;font-size:13px'>尚無帳號</div>"; }
-  allUsers.forEach(function(u, i){
-    var roleLabel = u.role==="admin"?"管理員":"門市老師";
-    var roleColor = u.role==="admin"?"var(--bl)":"var(--tl)";
+  if(!allUsers.length){
+    html = "<div style='text-align:center;color:var(--tx3);padding:16px;font-size:13px'>尚無帳號</div>";
+  }
+  allUsers.forEach(function(u){
     html += "<div class='usr-row'>";
-    html += "<span class='usr-email'>"+u.email+"</span>";
-    html += "<select class='usr-role-sel' data-email='"+u.email+"' data-oldrole='"+u.role+"' onchange='mgmtChangeRole(this)'>";
-    html += "<option value='admin'"+(u.role==="admin"?" selected":"")+">管理員</option>";
-    html += "<option value='store'"+(u.role==="store"?" selected":"")+">門市老師</option>";
+    html += "<span class='usr-email'>" + u.email + "</span>";
+    html += "<select class='usr-role-sel' data-email='" + u.email + "' data-oldrole='" + u.role + "' onchange='mgmtChangeRole(this)'>";
+    html += "<option value='admin'" + (u.role==="admin" ? " selected" : "") + ">管理員</option>";
+    html += "<option value='store'" + (u.role==="store" ? " selected" : "") + ">門市老師</option>";
     html += "</select>";
-    html += "<button class='btn bg sm' style='font-size:11px;color:var(--rd)' onclick='mgmtRemoveUser(""+u.email+"",""+u.role+"")'>移除</button>";
+    html += "<button class='btn bg sm' style='font-size:11px;color:var(--rd)' ";
+    html += "onclick='mgmtRemoveUser(this)' data-email='" + u.email + "' data-role='" + u.role + "'>移除</button>";
     html += "</div>";
   });
   document.getElementById("mgmt-user-list").innerHTML = html;
 }
-
 function mgmtAddUser(){
   var email = (document.getElementById("mgmt-new-email").value||"").trim().toLowerCase();
   var role  = document.getElementById("mgmt-new-role").value;
@@ -695,7 +695,8 @@ function mgmtAddUser(){
   mgmtRenderList();
 }
 
-function mgmtRemoveUser(email, role){
+function mgmtRemoveUser(btn){
+  var email = btn.dataset.email;
   if(!confirm("確定移除 "+email+" 的存取權限？")){ return; }
   ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
   STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
