@@ -501,7 +501,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div class="mo" id="m-add-pkg"><div class="md"><div class="mt2">新增/續購套票</div><div class="fr"><label class="flb">學員搜尋</label><input class="fi2" placeholder="輸入姓名或電話..."></div><div class="fgrid"><div class="fr"><label class="flb">套票類型</label><select class="fse"><option>套票A（3堂）</option><option>套票B（5堂）</option></select></div><div class="fr"><label class="flb">購買日期</label><input class="fi2" type="date"></div></div><div class="mf"><button class="btn bs sm" onclick="HM('add-pkg')">取消</button><button class="btn bp sm" onclick="HM('add-pkg')">建立套票</button></div></div></div>
 <div class="mo" id="m-edit-ncc"><div class="md" style="width:560px;max-width:95vw"><div class="mt2" id="en-title">NCC 編輯</div><div id="en-body"></div><div class="mf"><button class="btn bs sm" onclick="HM('edit-ncc')">取消</button><button class="btn bp sm" onclick="SN()">儲存</button></div></div></div>
 
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
 <script>
 // ── MSAL Config ─────────────────────────────────────────────────────────
 // REPLACE these two values after Azure AD App Registration
@@ -611,7 +611,7 @@ function applyRoleUI(role, email, name) {
 }
 
 // ── Init: handle redirect response first, then check session ─────────────
-(function initMsal() {
+window.addEventListener("load", function initMsal() {
   // Show loading while we check auth state
   document.getElementById("msal-loading").classList.add("show");
 
@@ -647,7 +647,7 @@ function applyRoleUI(role, email, name) {
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
-})();
+});
 
 
 // ── User Management ──────────────────────────────────────────────────────
