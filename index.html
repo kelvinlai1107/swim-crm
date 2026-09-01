@@ -501,64 +501,79 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div class="mo" id="m-add-pkg"><div class="md"><div class="mt2">新增/續購套票</div><div class="fr"><label class="flb">學員搜尋</label><input class="fi2" placeholder="輸入姓名或電話..."></div><div class="fgrid"><div class="fr"><label class="flb">套票類型</label><select class="fse"><option>套票A（3堂）</option><option>套票B（5堂）</option></select></div><div class="fr"><label class="flb">購買日期</label><input class="fi2" type="date"></div></div><div class="mf"><button class="btn bs sm" onclick="HM('add-pkg')">取消</button><button class="btn bp sm" onclick="HM('add-pkg')">建立套票</button></div></div></div>
 <div class="mo" id="m-edit-ncc"><div class="md" style="width:560px;max-width:95vw"><div class="mt2" id="en-title">NCC 編輯</div><div id="en-body"></div><div class="mf"><button class="btn bs sm" onclick="HM('edit-ncc')">取消</button><button class="btn bp sm" onclick="SN()">儲存</button></div></div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <script>
-// ── MSAL Config ─────────────────────────────────────────────────────────
-// REPLACE these two values after Azure AD App Registration
-var MSAL_CLIENT_ID   = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID   = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT    = window.location.origin + window.location.pathname;
+// ── Config ───────────────────────────────────────────────────────────────
+var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
+var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
+var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
 
-// ── Role definitions ─────────────────────────────────────────────────────
-// Admin emails (全功能):
-var ADMIN_EMAILS = [
-  "kelvin1107@lalasobaby.com"
-];
-var STORE_EMAILS = [
-  "yoyo1128@lalasobaby.com"
-];
-// 如果都不在清單裡，預設當作門市老師
+var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
+var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
 
-function getUserRole(email) {
-  if (!email) return "none";
+function getUserRole(email){
+  if(!email) return "none";
   var e = email.toLowerCase();
-  if (ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if (STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store"; // default: 門市老師
+  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
+  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
+  return "store";
 }
 
-var msalConfig = {
-  auth: {
-    clientId: MSAL_CLIENT_ID,
-    authority: "https://login.microsoftonline.com/" + MSAL_TENANT_ID,
-    redirectUri: MSAL_REDIRECT,
-    navigateToLoginRequestUrl: true,
-  },
-  cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: true }
-};
-var msalApp = new msal.PublicClientApplication(msalConfig);
-var _msalRole = "none";
-var _msalEmail = "";
-var _msalName = "";
+var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
 
-function msalSignIn() {
-  // Use redirect (more reliable than popup; avoids browser popup blockers)
-  sessionStorage.setItem("msal_login_initiated", "1");
-  msalApp.loginRedirect({ scopes: ["User.Read", "openid", "profile"] });
+// ── Init after page fully loaded ─────────────────────────────────────────
+window.addEventListener("load", function(){
+  _msalApp = new msal.PublicClientApplication({
+    auth:{
+      clientId: MSAL_CLIENT_ID,
+      authority: "https://login.microsoftonline.com/" + MSAL_TENANT_ID,
+      redirectUri: MSAL_REDIRECT,
+      navigateToLoginRequestUrl: true
+    },
+    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+  });
+
+  document.getElementById("msal-loading").classList.add("show");
+
+  _msalApp.handleRedirectPromise()
+    .then(function(resp){
+      if(resp && resp.account){
+        _msalEmail = (resp.account.username||"").toLowerCase();
+        _msalName  = resp.account.name || resp.account.username;
+        msalApplyAccess();
+        return;
+      }
+      var accounts = _msalApp.getAllAccounts();
+      if(accounts.length > 0){
+        _msalEmail = (accounts[0].username||"").toLowerCase();
+        _msalName  = accounts[0].name || accounts[0].username;
+        if(getUserRole(_msalEmail) !== "none"){ msalApplyAccess(); return; }
+      }
+      // Not signed in
+      document.getElementById("msal-loading").classList.remove("show");
+      document.getElementById("msal-login-screen").classList.add("show");
+    })
+    .catch(function(err){
+      console.error("MSAL init error:", err);
+      document.getElementById("msal-loading").classList.remove("show");
+      document.getElementById("msal-login-screen").classList.add("show");
+    });
+});
+
+function msalSignIn(){
+  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
 }
 
-function msalSignOut() {
-  msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+function msalSignOut(){
+  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
 }
 
-function msalApplyAccess() {
+function msalApplyAccess(){
   _msalRole = getUserRole(_msalEmail);
-  if (_msalRole === "none") {
+  if(_msalRole === "none"){
     document.getElementById("msal-loading").classList.remove("show");
     document.getElementById("msal-login-screen").classList.add("show");
-    setTimeout(function(){
-      alert("此帳號 (" + _msalEmail + ") 無存取權限，請聯絡管理員。");
-    }, 100);
+    setTimeout(function(){ alert("此帳號 ("+_msalEmail+") 無存取權限，請聯絡管理員。"); }, 200);
     return;
   }
   document.getElementById("msal-login-screen").classList.remove("show");
@@ -567,177 +582,47 @@ function msalApplyAccess() {
   applyRoleUI(_msalRole, _msalEmail, _msalName);
 }
 
-function applyRoleUI(role, email, name) {
-  var avEl = document.querySelector(".av");
+function applyRoleUI(role, email, name){
+  var avEl   = document.querySelector(".av");
   var nameEl = document.querySelector(".u-area span");
-  if (avEl) avEl.textContent = (name||"?").slice(0,2);
-  if (nameEl) nameEl.textContent = name || email;
+  if(avEl)   avEl.textContent  = (name||"?").slice(0,2);
+  if(nameEl) nameEl.textContent = name || email;
 
   var uArea = document.querySelector(".u-area");
-  if (uArea) {
+  if(uArea){
     var chip = document.createElement("div");
     chip.className = "user-chip";
-    chip.innerHTML = "<span style='max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>" + email + "</span><span class='sign-out' onclick='msalSignOut()' title='登出'>登出</span>";
+    chip.innerHTML = "<span style='max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+email+"</span>"
+                   + "<span class='sign-out' onclick='msalSignOut()' title='登出'>登出</span>";
     uArea.appendChild(chip);
   }
 
-  if (role === "admin") {
-    var mgmtBtn = document.createElement("button");
-    mgmtBtn.className = "btn bs sm";
-    mgmtBtn.style.marginLeft = "4px";
-    mgmtBtn.innerHTML = "&#9881; 帳號管理";
-    mgmtBtn.onclick = mgmtOpen;
-    if (uArea) uArea.appendChild(mgmtBtn);
+  if(role === "admin"){
+    if(uArea){
+      var btn = document.createElement("button");
+      btn.className = "btn bs sm";
+      btn.style.marginLeft = "4px";
+      btn.innerHTML = "&#9881; 帳號管理";
+      btn.onclick = mgmtOpen;
+      uArea.appendChild(btn);
+    }
     document.querySelectorAll(".ni").forEach(function(n){ n.style.display=""; });
     G("students");
   } else {
-    // 門市老師: only renewal
     document.querySelectorAll(".ni").forEach(function(n){
-      var oc = n.getAttribute("onclick") || "";
-      if (oc.indexOf("renewal") < 0) n.style.display = "none";
+      if((n.getAttribute("onclick")||"").indexOf("renewal") < 0) n.style.display="none";
     });
     document.querySelectorAll(".nl").forEach(function(nl){
-      // Hide section label if all its items are hidden
-      var sib = nl.nextElementSibling;
-      var allHidden = true;
+      var sib=nl.nextElementSibling, allHidden=true;
       while(sib && !sib.classList.contains("nl")){
-        if(sib.classList.contains("ni") && sib.style.display !== "none"){ allHidden = false; break; }
-        sib = sib.nextElementSibling;
+        if(sib.classList.contains("ni") && sib.style.display!=="none"){ allHidden=false; break; }
+        sib=sib.nextElementSibling;
       }
-      if(allHidden) nl.style.display = "none";
+      if(allHidden) nl.style.display="none";
     });
     G("renewal");
   }
 }
-
-// ── Init: handle redirect response first, then check session ─────────────
-window.addEventListener("load", function initMsal() {
-  // Show loading while we check auth state
-  document.getElementById("msal-loading").classList.add("show");
-
-  // handleRedirectPromise must be called on every page load to complete redirect flow
-  msalApp.handleRedirectPromise()
-    .then(function(resp) {
-      if (resp && resp.account) {
-        // Came back from Microsoft login redirect
-        _msalEmail = (resp.account.username || "").toLowerCase();
-        _msalName  = resp.account.name || resp.account.username;
-        msalApplyAccess();
-        return;
-      }
-
-      // Check if already signed in from previous session
-      var accounts = msalApp.getAllAccounts();
-      if (accounts.length > 0) {
-        _msalEmail = (accounts[0].username || "").toLowerCase();
-        _msalName  = accounts[0].name || accounts[0].username;
-        _msalRole  = getUserRole(_msalEmail);
-        if (_msalRole !== "none") {
-          msalApplyAccess();
-          return;
-        }
-      }
-
-      // Not signed in - show login screen
-      document.getElementById("msal-loading").classList.remove("show");
-      document.getElementById("msal-login-screen").classList.add("show");
-    })
-    .catch(function(err) {
-      console.error("MSAL init error:", err);
-      document.getElementById("msal-loading").classList.remove("show");
-      document.getElementById("msal-login-screen").classList.add("show");
-    });
-});
-
-
-// ── User Management ──────────────────────────────────────────────────────
-function mgmtOpen(){
-  if(_msalRole !== "admin"){ alert("僅管理員可存取"); return; }
-  mgmtRenderList();
-  document.getElementById("mgmt-ov").classList.add("open");
-}
-
-function mgmtRenderList(){
-  var adminList = ADMIN_EMAILS.slice();
-  var storeList = STORE_EMAILS.slice();
-  var allUsers  = [];
-  adminList.forEach(function(e){ allUsers.push({email:e, role:"admin"}); });
-  storeList.forEach(function(e){ allUsers.push({email:e, role:"store"}); });
-
-  var html = "";
-  if(!allUsers.length){
-    html = "<div style='text-align:center;color:var(--tx3);padding:16px;font-size:13px'>尚無帳號</div>";
-  }
-  allUsers.forEach(function(u){
-    html += "<div class='usr-row'>";
-    html += "<span class='usr-email'>" + u.email + "</span>";
-    html += "<select class='usr-role-sel' data-email='" + u.email + "' data-oldrole='" + u.role + "' onchange='mgmtChangeRole(this)'>";
-    html += "<option value='admin'" + (u.role==="admin" ? " selected" : "") + ">管理員</option>";
-    html += "<option value='store'" + (u.role==="store" ? " selected" : "") + ">門市老師</option>";
-    html += "</select>";
-    html += "<button class='btn bg sm' style='font-size:11px;color:var(--rd)' ";
-    html += "onclick='mgmtRemoveUser(this)' data-email='" + u.email + "' data-role='" + u.role + "'>移除</button>";
-    html += "</div>";
-  });
-  document.getElementById("mgmt-user-list").innerHTML = html;
-}
-function mgmtAddUser(){
-  var email = (document.getElementById("mgmt-new-email").value||"").trim().toLowerCase();
-  var role  = document.getElementById("mgmt-new-role").value;
-  if(!email || email.indexOf("@")<0){ alert("請輸入有效 email"); return; }
-  // Remove from both lists first
-  ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email; });
-  STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email; });
-  // Add to correct list
-  if(role==="admin") ADMIN_EMAILS.push(email);
-  else STORE_EMAILS.push(email);
-  document.getElementById("mgmt-new-email").value = "";
-  mgmtRenderList();
-}
-
-function mgmtRemoveUser(btn){
-  var email = btn.dataset.email;
-  if(!confirm("確定移除 "+email+" 的存取權限？")){ return; }
-  ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  mgmtRenderList();
-}
-
-function mgmtChangeRole(sel){
-  var email   = sel.dataset.email;
-  var newRole = sel.value;
-  ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  if(newRole==="admin") ADMIN_EMAILS.push(email);
-  else STORE_EMAILS.push(email);
-  mgmtRenderList();
-}
-
-function mgmtExportHTML(){
-  // Read current HTML, replace email arrays, trigger download
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", window.location.href, true);
-  xhr.onload = function(){
-    if(xhr.status !== 200){ alert("無法讀取原始檔案，請手動更新 index.html"); return; }
-    var src = xhr.responseText;
-
-    // Replace ADMIN_EMAILS array
-    var adminStr = JSON.stringify(ADMIN_EMAILS);
-    var storeStr = JSON.stringify(STORE_EMAILS);
-    src = src.replace(/var ADMIN_EMAILS = \[[\s\S]*?\];/, "var ADMIN_EMAILS = "+adminStr+";");
-    src = src.replace(/var STORE_EMAILS = \[[\s\S]*?\];/, "var STORE_EMAILS = "+storeStr+";");
-
-    var blob = new Blob([src], {type:"text/html;charset=utf-8"});
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "index.html";
-    a.click();
-    URL.revokeObjectURL(a.href);
-    alert("index.html 已下載！\n請上傳至 GitHub repo 取代原本的檔案。");
-  };
-  xhr.send();
-}
-
 </script>
 
 <script>
