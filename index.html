@@ -9,7 +9,7 @@
 :root{--bg:#F5F4F0;--sf:#FFF;--sf2:#F0EFE9;--bd:rgba(0,0,0,.08);--bd2:rgba(0,0,0,.14);--tx:#1A1918;--tx2:#6B6A64;--tx3:#9E9D97;--bl:#1A5FBA;--bl-bg:#EAF1FB;--tl:#0F7560;--tl-bg:#E2F3EE;--am:#9B6200;--am-bg:#FEF3DC;--rd:#B93535;--rd-bg:#FDEAEA;--pk:#96356C;--pk-bg:#FAEAF3;--pu:#5340B5;--pu-bg:#EEEDFE;--gy:#E8E7E1;--r:8px;--rl:12px}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.6}
-.app{display:grid;grid-template-columns:var(--sb-w,220px) 1fr;grid-template-rows:52px 1fr;height:100vh;transition:grid-template-columns .2s}
+.app{display:none;grid-template-columns:var(--sb-w,220px) 1fr;grid-template-rows:52px 1fr;height:100vh;transition:grid-template-columns .2s}
 .topbar{grid-column:1/-1;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;gap:12px}
 .logo{font-size:15px;font-weight:700;color:var(--bl)}.logo span{color:var(--tx3);font-weight:300}
 .s-pill{font-size:12px;background:var(--bl-bg);color:var(--bl);padding:3px 10px;border-radius:20px;font-weight:500}
@@ -562,6 +562,7 @@ function msalApplyAccess() {
   }
   document.getElementById("msal-login-screen").classList.remove("show");
   document.getElementById("msal-loading").classList.remove("show");
+  document.querySelector(".app").classList.add("authed");
   applyRoleUI(_msalRole, _msalEmail, _msalName);
 }
 
