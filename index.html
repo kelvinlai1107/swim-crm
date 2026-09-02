@@ -760,7 +760,14 @@ function mgmtExportHTML(){
     var blob = new Blob([src], {type:"text/html;charset=utf-8"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.downloa
+    a.download = "index.html";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    alert("index.html 已下載！\n請上傳至 GitHub 取代原本的檔案。");
+  };
+  xhr.send();
+}
+
 var _ct='all',_nid='',_rvCls='';
 var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
 var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
@@ -2098,9 +2105,6 @@ function toggleSidebar(){
 
 
 
- sb.classList.toggle("collapsed");
-  document.querySelector(".app").style.setProperty("--sb-w", sb.classList.contains("collapsed")?"52px":"220px");
-}
 
 
 
