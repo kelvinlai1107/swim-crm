@@ -209,6 +209,17 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .upload-drop{border:2px dashed var(--bd2);border-radius:var(--rl);padding:32px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sf)}
 .upload-drop:hover,.upload-drop.drag-over{border-color:var(--bl);background:var(--bl-bg)}
 .mgmt-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center}.mgmt-ov.open{display:flex}.mgmt-pn{background:var(--sf);border-radius:var(--rl);width:560px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2)}.mgmt-hd{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}.mgmt-bd{padding:20px;overflow-y:auto;flex:1}.mgmt-ft{padding:14px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}.usr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.usr-row:last-child{border-bottom:none}.usr-email{flex:1;font-family:monospace;font-size:12px;color:var(--tx2)}.usr-role-sel{height:30px;border:1px solid var(--bd2);border-radius:var(--r);padding:0 8px;font-size:12px;font-family:inherit;background:var(--sf);cursor:pointer}.app.authed{display:grid}
+.formal-hall-btn{padding:5px 14px;border-radius:20px;border:1.5px solid var(--bd2);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;color:var(--tx2);transition:all .15s}
+.formal-hall-btn.active{background:var(--bl);border-color:var(--bl);color:#fff}
+.formal-vtab{padding:4px 12px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--sf);font-size:12px;cursor:pointer;color:var(--tx2)}
+.formal-vtab.active{background:var(--tx);color:var(--sf)}
+.formal-day-block{flex:0 0 auto;min-width:220px;max-width:280px}
+.formal-day-hd{font-size:14px;font-weight:700;color:var(--tx);padding:6px 0 8px;border-bottom:2px solid var(--bd2);margin-bottom:8px}
+.formal-slots{display:flex;flex-direction:column;gap:8px}
+.formal-slot{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:10px 12px}
+.formal-slot-hd{margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;gap:3px}
+.formal-slot-row{display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px solid var(--bd);font-size:12px}
+.formal-slot-row:last-child{border-bottom:none}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -362,19 +373,46 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div class="main">
 
 <div id="pg-formal" style="display:none">
-  <div class="ph"><div class="pt">正式生</div><div class="ps" id="formal-count"></div></div>
-  <div class="tb" style="flex-wrap:wrap;gap:6px">
+  <div class="ph">
+    <div class="pt">正式生</div>
+    <div class="ps" id="formal-count"></div>
+  </div>
+
+  <!-- ALL / A01 / A02 切換 -->
+  <div style="display:flex;gap:6px;margin-bottom:12px">
+    <button class="formal-hall-btn active" data-hall="" onclick="formalSetHall(this,'')">ALL</button>
+    <button class="formal-hall-btn" data-hall="西屯" onclick="formalSetHall(this,'西屯')">A01 西屯館</button>
+    <button class="formal-hall-btn" data-hall="北屯" onclick="formalSetHall(this,'北屯')">A02 北屯館</button>
+  </div>
+
+  <!-- 篩選列 + 名單/劃位表切換 -->
+  <div class="tb" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">
     <div class="sw"><svg width="14" height="14" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><input class="si" id="q-formal" placeholder="搜尋姓名、家長、電話..." oninput="formalRender()"></div>
-    <select class="fs" id="f-formal-hall" onchange="formalRender()"><option value="">兩館合併</option><option value="西屯">西屯館</option><option value="北屯">北屯館</option></select>
+    <select class="fs" id="f-formal-hall" onchange="formalRender();formalGridRender()" style="display:none"></select>
     <select class="fs" id="f-formal-cls" onchange="formalRender()"><option value="">所有班別</option><option value="A">親子A</option><option value="B">親子B</option><option value="C">幼兒C</option><option value="D">幼兒D</option><option value="E">兒童E</option><option value="F">兒童F</option></select>
     <select class="fs" id="f-formal-teacher" onchange="formalRender()"><option value="">所有老師</option></select>
     <button class="btn bp sm" onclick="stuImportOpen()">&#8679; 匯入學員名單</button>
+    <div style="margin-left:auto;display:flex;gap:4px">
+      <button class="formal-vtab active" data-view="list" onclick="formalSwitchView('list')">名單</button>
+      <button class="formal-vtab" data-view="grid" onclick="formalSwitchView('grid')">劃位表</button>
+    </div>
   </div>
-  <div style="overflow-x:auto;margin-top:8px">
-    <table class="stu-tbl"><thead><tr><th style="width:36px">#</th><th>學員姓名</th><th>家長・電話</th><th>班別・老師</th><th>時段</th><th>生日</th><th>歷史</th></tr></thead>
+
+  <!-- 名單視圖 -->
+  <div id="formal-list-view" style="overflow-x:auto">
+    <table class="stu-tbl"><thead><tr>
+      <th style="width:36px">#</th><th>學員姓名</th><th>家長・電話</th>
+      <th>班別・老師</th><th>時段</th><th>生日</th><th>歷史</th>
+    </tr></thead>
     <tbody id="formal-body"></tbody></table>
   </div>
+
+  <!-- 劃位表視圖 -->
+  <div id="formal-grid-view" style="display:none;overflow-x:auto;padding-bottom:20px">
+    <div id="formal-grid-body" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;padding:4px 0"></div>
+  </div>
 </div>
+
 <div id="pg-students">
   <div class="ph"><div class="pt">所有學員</div><div class="ha"><button class="btn bs sm">匯入Excel</button><button class="btn bp sm" onclick="SM('add-stu')">＋ 新增學員</button></div></div>
   <div class="sr">
