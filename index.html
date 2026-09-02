@@ -1104,7 +1104,7 @@ function formalRender(){
     var isX = (SEAT_X||[]).indexOf(r) >= 0;
     var rHall = isX ? '西屯' : '北屯';
     var hallChip = hall ? '' : '<span class="tag '+(rHall==='北屯'?'t-pu':'t-bl')+'" style="font-size:10px">'+rHall+'</span> ';
-    var specBadge = r.special ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:var(--am);color:#fff;font-size:9px;font-weight:700;margin-right:3px">特</span>' : '';
+    var specBadge = (r.special===true) ? ' <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:9px;font-weight:700;border:1px solid #F0A060">特</span>' : '';
     var hist = '';
     if(r.total_s){
       r.total_s.replace(/\d+G/,'').split('.').forEach(function(seg){
@@ -1114,7 +1114,7 @@ function formalRender(){
     }
     html += '<tr class="stu-row" style="cursor:default">';
     html += '<td style="font-size:11px;color:var(--tx3);text-align:center">'+r.order+'</td>';
-    html += '<td><div class="tn">'+hallChip+specBadge+r.name+'</div><div class="ts" style="font-size:11px">'+r.seasons+'</div></td>';
+    html += '<td><div class="tn">'+hallChip+r.name+specBadge+'</div><div class="ts" style="font-size:11px">'+r.seasons+'</div></td>';
     html += '<td><div class="tn" style="font-size:12px">'+r.parent+'</div><div class="ts">'+r.phone+'</div></td>';
     html += '<td><span class="tag '+(CC[r.cls]||'t-gy')+'" style="font-size:11px">'+r.cls+'班</span> '+r.teacher+'</td>';
     html += '<td style="font-size:12px;white-space:nowrap">週'+r.day+' '+r.time+'</td>';
@@ -1163,7 +1163,7 @@ function formalGridRender(){
         html += '<div style="font-size:11px;color:var(--tx3);padding:4px 0;font-style:italic">（空堂）</div>';
       } else {
         students.forEach(function(r){
-          var specBadge = r.special ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--am);color:#fff;font-size:8px;font-weight:700;margin-right:2px">特</span>' : '';
+          var specBadge = (r.special===true) ? ' <span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:8px;font-weight:700;border:1px solid #F0A060">特</span>' : '';
           html += '<div class="formal-slot-row">';
           html += '<span style="font-size:10px;color:var(--tx3);width:16px;flex-shrink:0">'+r.order+'</span>';
           html += '<span style="font-size:12px;font-weight:500">'+specBadge+r.name+'</span>';
