@@ -1318,7 +1318,7 @@ function formalRender(){
       html += '週'+r.day+' '+r.time+' <span class="tag '+(CC[r.cls]||'t-gy')+'" style="font-size:11px">'+r.cls+'班</span> ';
       html += '<span style="font-size:11px;color:var(--tx3)">'+r.teacher+'</span></td></tr>';
     }
-    var isX = (SEAT_X||[]).indexOf(r) >= 0;
+    var isX = r.hall === '西屯';
     var rHall = isX ? '西屯' : '北屯';
     var hallChip = hall ? '' : '<span class="tag '+(rHall==='北屯'?'t-pu':'t-bl')+'" style="font-size:10px">'+rHall+'</span> ';
     var specBadge = (r.special===true) ? ' <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:9px;font-weight:700;border:1px solid #F0A060">特</span>' : '';
