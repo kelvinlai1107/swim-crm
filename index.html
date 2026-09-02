@@ -392,7 +392,8 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   </div>
   <div class="tb">
     <div class="sw"><svg width="14" height="14" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><input class="si" id="q-stu" placeholder="搜尋姓名、家長、電話、學員編號..." oninput="RS()"></div>
-    <button class="btn bp sm" onclick="stuImportOpen()">&#8679; 匯入學員名單</button>
+    <select class="fs" id="f-hall-stu" onchange="RS()"><option value="">兩館合併</option><option value="西屯">西屯館</option><option value="北屯">北屯館</option></select>
+      <button class="btn bp sm" onclick="stuImportOpen()">&#8679; 匯入學員名單</button>
     <select class="fs" id="f-season" onchange="RS()"><option value="">所有季別</option><option value="26S1">2026 S1 春季</option><option value="25S3">2025 S3 秋季</option><option value="25S2">2025 S2 夏季</option><option value="25S1">2025 S1 春季</option></select>
     <select class="fs" id="f-type" onchange="RS()"><option value="">所有班型</option><option>親子班</option><option>幼兒班</option><option>兒童班</option></select>
   </div>
@@ -759,17 +760,7 @@ function mgmtExportHTML(){
     var blob = new Blob([src], {type:"text/html;charset=utf-8"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "index.html";
-    a.click();
-    URL.revokeObjectURL(a.href);
-    alert("index.html 已下載！\n請上傳至 GitHub 取代原本的檔案。");
-  };
-  xhr.send();
-}
-
-</script>
-
-<script>
+    a.downloa
 var _ct='all',_nid='',_rvCls='';
 var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
 var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
@@ -1092,7 +1083,9 @@ function RS(){
   var fs=document.getElementById("f-season").value;
   var ft=document.getElementById("f-type").value;
   var data=STU;
+  var fhall=(document.getElementById('f-hall-stu')||{}).value||'';
   if(_ct!=="all") data=data.filter(function(s){return s.id_===_ct;});
+  if(fhall) data=data.filter(function(s){return s.hall===fhall;});
   if(q) data=data.filter(function(s){
     return s.name.indexOf(q)>=0||s.parent.indexOf(q)>=0||s.phone.indexOf(q)>=0||
            (s.id||s.no||"").toLowerCase().indexOf(q)>=0||(s.no&&s.no.toLowerCase().indexOf(q)>=0);
@@ -2094,6 +2087,18 @@ function attachGridTooltips(){
 function toggleSidebar(){
   var sb=document.querySelector(".sidebar");
   sb.classList.toggle("collapsed");
+  document.querySelector(".app").style.setProperty("--sb-w", sb.classList.contains("collapsed")?"52px":"220px");
+}
+
+
+
+
+
+
+
+
+
+ sb.classList.toggle("collapsed");
   document.querySelector(".app").style.setProperty("--sb-w", sb.classList.contains("collapsed")?"52px":"220px");
 }
 
