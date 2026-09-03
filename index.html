@@ -1492,37 +1492,26 @@ function formalGridRender(){
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var CC = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var TC = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
+  var TIME_BG = '#EEF2FF';  // blue-grey for time columns, distinct from green(E) and yellow(C)
 
-  // Split days into weekdays (二-五) and Saturday (六)
-  var WD_DAYS = ['二','三','四','五'];
-  var SA_DAYS = ['六'];
-  var allDays = WD_DAYS.concat(SA_DAYS).filter(function(d){
-    return slots.some(function(sl){ return sl.day===d; });
-  });
-  var wdDays = allDays.filter(function(d){ return d!=='六'; });
-  var hasSat = slots.some(function(sl){ return sl.day==='六'; });
+  // Days present in data
+  var daySet={};
+  slots.forEach(function(sl){ daySet[sl.day]=true; });
+  var wdDays = ['二','三','四','五'].filter(function(d){ return daySet[d]; });
+  var hasSat = !!daySet['六'];
 
-  // Times for each section
+  // Times per section
   var wdTimeSet={}, saTimeSet={};
   slots.forEach(function(sl){
     if(sl.day==='六') saTimeSet[sl.time]=true;
     else wdTimeSet[sl.time]=true;
   });
+  // WD rows: times that have at least one class on 週二-五
   var wdTimes = Object.keys(wdTimeSet).sort();
-  var saTimes = Object.keys(saTimeSet).sort();
-  // All rows = union, but we'll show time in the appropriate column
-  var allTimes = [];
-  var seen={};
-  wdTimes.concat(saTimes).forEach(function(t){ if(!seen[t]){seen[t]=true;allTimes.push(t);} });
-  allTimes.sort();
-  // Only keep times that have at least one class in their section
-  allTimes = allTimes.filter(function(t){
-    if(wdTimeSet[t]) return true;   // has weekday class
-    if(saTimeSet[t]) return true;   // has saturday class
-    return false;
-  });
+  // SA rows: times that ONLY appear in 週六 (not in WD at all)
+  var saTimes = Object.keys(saTimeSet).filter(function(t){ return !wdTimeSet[t]; }).sort();
 
-  // Lookup: "day§time" → slots[]
+  // Slot lookup
   var slotMap={};
   slots.forEach(function(sl){
     var k=sl.day+'§'+sl.time;
@@ -1534,123 +1523,91 @@ function formalGridRender(){
   });
 
   var TIME_W=56, COL_W=74, ROW_H=6*21, HDR_H=22;
-  var wdCols = wdDays.length * SUBCOLS;
-  var saCols = hasSat ? SUBCOLS : 0;
-  var totalCols = 1 + wdCols + (hasSat ? 1 + saCols : 0); // time + wd cols + [sat-time + sat cols]
+
+  // Helper: render one slot cell
+  function renderSlotCell(sl, rowH){
+    if(!sl) return '<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+rowH+'px"></td>';
+    var bg=CC[sl.cls]||'#fff', tc=TC[sl.cls]||'#333';
+    var h='<td style="border:1px solid #ddd;background:#fff;vertical-align:top;height:'+rowH+'px;padding:0">';
+    h+='<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
+    h+='<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;font-size:10px;font-weight:700">'+sl.cls+'</span>';
+    h+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span></div>';
+    sl.students.forEach(function(s){
+      if(s.empty){
+        h+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
+      } else {
+        var spec=s.special?'<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>':'';
+        h+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+spec+'</div>';
+      }
+    });
+    h+='</td>';
+    return h;
+  }
+
+  // Merge WD times and SA-only times: SA times appear in their own rows at the right position
+  // Strategy: interleave WD rows and SA-only rows by time order
+  var allRowTimes = [];
+  var wdIdx=0, saIdx=0;
+  while(wdIdx<wdTimes.length || saIdx<saTimes.length){
+    var wt = wdIdx<wdTimes.length ? wdTimes[wdIdx] : null;
+    var st = saIdx<saTimes.length ? saTimes[saIdx] : null;
+    if(!st || (wt && wt<=st)){ allRowTimes.push({time:wt, isWd:true, isSa:wdTimeSet[wt]&&saTimeSet[wt]}); wdIdx++; }
+    else { allRowTimes.push({time:st, isWd:false, isSa:true}); saIdx++; }
+  }
+
+  var totalCols = 1 + wdDays.length*SUBCOLS + (hasSat ? 1+SUBCOLS : 0);
 
   var html='<div style="overflow:auto;max-height:calc(100vh - 240px)">';
   html+='<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
 
   // Colgroup
   html+='<colgroup><col style="width:'+TIME_W+'px">';
-  for(var i=0;i<wdCols;i++) html+='<col style="width:'+COL_W+'px">';
-  if(hasSat){
-    html+='<col style="width:'+TIME_W+'px">';
-    for(var i=0;i<saCols;i++) html+='<col style="width:'+COL_W+'px">';
-  }
+  for(var i=0;i<wdDays.length*SUBCOLS;i++) html+='<col style="width:'+COL_W+'px">';
+  if(hasSat){ html+='<col style="width:'+TIME_W+'px">'; for(var i=0;i<SUBCOLS;i++) html+='<col style="width:'+COL_W+'px">'; }
   html+='</colgroup>';
 
-  // ── Header row 1 ──
+  // Header row 1
   html+='<thead><tr>';
-  html+='<th rowspan="2" style="border:1px solid #ccc;background:#e8f0e8;font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
+  html+='<th rowspan="2" style="border:1px solid #ccc;background:'+TIME_BG+';font-size:11px;color:#444;text-align:center;vertical-align:middle">時段</th>';
   wdDays.forEach(function(day){
     html+='<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+day+'</th>';
   });
   if(hasSat){
-    html+='<th rowspan="2" style="border:1px solid #ccc;background:#e8f0e8;font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    html+='<th colspan="'+saCols+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
+    html+='<th rowspan="2" style="border:1px solid #ccc;background:'+TIME_BG+';font-size:11px;color:#444;text-align:center;vertical-align:middle">時段</th>';
+    html+='<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
   }
   html+='</tr>';
 
-  // ── Header row 2 ──
+  // Header row 2
   html+='<tr>';
-  for(var i=0;i<wdCols;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
-  if(hasSat){
-    for(var i=0;i<saCols;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
-  }
-  html+='</tr></thead>';
+  for(var i=0;i<wdDays.length*SUBCOLS;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
+  if(hasSat) for(var i=0;i<SUBCOLS;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
+  html+='</tr></thead><tbody>';
 
-  // ── Data rows ──
-  // We need rows for both wd times and sa times
-  // Show all times; for each row, show time in wd time col if it's a wd time, else show blank
-  // Similarly for Saturday
-
-  html+='<tbody>';
   var prevGrp=-1;
-  allTimes.forEach(function(time){
+  allRowTimes.forEach(function(row){
+    var time=row.time, isWd=row.isWd, isSa=row.isSa;
     var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
-    if(prevGrp>=0&&grp!==prevGrp){
-      html+='<tr><td colspan="'+totalCols+'" style="height:3px;background:#bbb;border:none;padding:0"></td></tr>';
-    }
+    if(prevGrp>=0&&grp!==prevGrp) html+='<tr><td colspan="'+totalCols+'" style="height:3px;background:#bbb;border:none;padding:0"></td></tr>';
     prevGrp=grp;
-
-    var isWdTime = !!wdTimeSet[time];
-    var isSaTime = hasSat && !!saTimeSet[time];
-
+    var rowH=ROW_H+HDR_H;
     html+='<tr>';
     // WD time cell
-    html+='<td style="border:1px solid #ccc;background:#e8f0e8;text-align:center;font-weight:700;font-size:12px;color:'+(isWdTime?'#444':'#ddd')+';vertical-align:middle;height:'+(ROW_H+HDR_H)+'px">'+(isWdTime?time:'')+'</td>';
-
+    html+='<td style="border:1px solid #ccc;background:'+TIME_BG+';text-align:center;font-weight:700;font-size:12px;color:'+(isWd?'#333':'#bbb')+';vertical-align:middle;height:'+rowH+'px">'+(isWd?time:'')+'</td>';
     // WD class cols
     wdDays.forEach(function(day){
-      var key=day+'§'+time;
-      var daySlots=isWdTime?(slotMap[key]||[]):[];
-      for(var si=0;si<SUBCOLS;si++){
-        var sl=daySlots[si]||null;
-        if(!sl){
-          html+='<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+(ROW_H+HDR_H)+'px"></td>';
-        } else {
-          var bg=CC[sl.cls]||'#fff'; var tc=TC[sl.cls]||'#333';
-          html+='<td style="border:1px solid #ddd;background:#fff;vertical-align:top;height:'+(ROW_H+HDR_H)+'px;padding:0">';
-          html+='<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
-          html+='<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;font-size:10px;font-weight:700">'+sl.cls+'</span>';
-          html+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
-          html+='</div>';
-          sl.students.forEach(function(s){
-            if(s.empty){
-              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
-            } else {
-              var spec=s.special?'<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>':'';
-              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+spec+'</div>';
-            }
-          });
-          html+='</td>';
-        }
-      }
+      var daySlots=isWd?(slotMap[day+'§'+time]||[]):[];
+      for(var si=0;si<SUBCOLS;si++) html+=renderSlotCell(daySlots[si]||null, rowH);
     });
-
-    // Saturday section
+    // Saturday
     if(hasSat){
-      html+='<td style="border:1px solid #ccc;background:#e8f0e8;text-align:center;font-weight:700;font-size:12px;color:'+(isSaTime?'#444':'#ddd')+';vertical-align:middle">'+(isSaTime?time:'')+'</td>';
-      var saKey='六§'+time;
-      var saSlots=isSaTime?(slotMap[saKey]||[]):[];
-      for(var si=0;si<SUBCOLS;si++){
-        var sl=saSlots[si]||null;
-        if(!sl){
-          html+='<td style="border:1px solid #e8e8e8;background:#fafafa"></td>';
-        } else {
-          var bg=CC[sl.cls]||'#fff'; var tc=TC[sl.cls]||'#333';
-          html+='<td style="border:1px solid #ddd;background:#fff;vertical-align:top;padding:0">';
-          html+='<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
-          html+='<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;font-size:10px;font-weight:700">'+sl.cls+'</span>';
-          html+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
-          html+='</div>';
-          sl.students.forEach(function(s){
-            if(s.empty){
-              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
-            } else {
-              var spec=s.special?'<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>':'';
-              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+spec+'</div>';
-            }
-          });
-          html+='</td>';
-        }
-      }
+      html+='<td style="border:1px solid #ccc;background:'+TIME_BG+';text-align:center;font-weight:700;font-size:12px;color:'+(isSa?'#333':'#bbb')+';vertical-align:middle">'+(isSa?time:'')+'</td>';
+      var saSlots=isSa?(slotMap['六§'+time]||[]):[];
+      for(var si=0;si<SUBCOLS;si++) html+=renderSlotCell(saSlots[si]||null, rowH);
     }
     html+='</tr>';
   });
   html+='</tbody></table></div>';
-
   var gv=document.getElementById('formal-grid-body');
   if(gv) gv.innerHTML=html;
 }
