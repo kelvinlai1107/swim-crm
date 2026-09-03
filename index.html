@@ -1678,7 +1678,9 @@ function stuDoImport(){
   } catch(e){ console.warn('localStorage load failed:', e); }
 })();
 
+var _formalHall = '';
 function formalSetHall(btn, hall){
+  _formalHall = hall;
   document.querySelectorAll('.formal-hall-btn').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
   var hSel = document.getElementById('f-formal-hall');
@@ -1734,7 +1736,7 @@ function formalInit(){
 
 function formalRender(){
   var q       = (document.getElementById('q-formal').value||'').toLowerCase();
-  var hall    = (document.getElementById('f-formal-hall')||{}).value||'';
+  var hall = _formalHall || (document.getElementById('f-formal-hall')||{}).value||'';
   var cls     = (document.getElementById('f-formal-cls')||{}).value||'';
   var teacher = (document.getElementById('f-formal-teacher')||{}).value||'';
   var seat = hall==='西屯'?(SEAT_X||[]) : hall==='北屯'?(SEAT_B||[]) : (SEAT_X||[]).concat(SEAT_B||[]);
@@ -1791,7 +1793,7 @@ function formalRender(){
 
 function formalGridRender(){
   if(typeof SLOTS_X==='undefined'||typeof SLOTS_B==='undefined') return;
-  var hall = (document.getElementById('f-formal-hall')||{}).value||'';
+  var hall = _formalHall || (document.getElementById('f-formal-hall')||{}).value||'';
   // Must select a specific hall for grid view
   if(!hall){
     var gv=document.getElementById('formal-grid-body');
