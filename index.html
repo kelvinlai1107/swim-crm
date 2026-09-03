@@ -1616,24 +1616,35 @@ function formalGridRender(){
     html += '</tr>';
   });
 
-  // SA-only rows (times ONLY in SA, not in WD)
+  // SA-only times: render as a SEPARATE table below if any exist
   var saOnlyTimes = saTimes.filter(function(t){ return !wdTimeSet2[t]; });
-  saOnlyTimes.forEach(function(time){
-    var grp = parseInt(time)<12?0:parseInt(time)<18?1:2;
-    if(prevGrp>=0&&grp!==prevGrp) html+='<tr><td colspan="'+totalCols+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
-    prevGrp=grp;
-    html += '<tr>';
-    // Time col (empty for WD side)
-    html += '<td style="position:sticky;left:0;z-index:5;border:1px solid #ccc;background:'+TBG+';text-align:center;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px"></td>';
-    // WD class cols (all empty)
-    for(var i=0;i<wdCols;i++) html+='<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+RH+'px"></td>';
-    // SA section
-    html += '<td style="width:4px;padding:0;border:none;background:#ddd"></td>';
-    html += '<td style="border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;width:'+TW+'px">'+time+'</td>';
-    var saDS=getSlots('六',time);
-    for(var si=0;si<saCols;si++) html+=cellHTML(saDS[si]||null,RH);
-    html += '</tr>';
-  });
+  if(hasSat && saOnlyTimes.length > 0){
+    html += '</tbody></table></div>';
+    // Start SA-only mini table
+    html += '<div style="margin-top:6px;overflow-x:auto">';
+    html += '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
+    html += '<colgroup><col style="width:'+TW+'px">';
+    for(var i=0;i<saCols;i++) html+='<col style="width:'+CW+'px">';
+    html += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
+    html += '<th colspan="'+(1+saCols)+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六（續）</th>';
+    html += '</tr><tr>';
+    html += '<th style="border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;padding:3px 0">時段</th>';
+    for(var i=0;i<saCols;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px">班別</th>';
+    html += '</tr></thead><tbody>';
+    var prevG2=-1;
+    saOnlyTimes.forEach(function(time){
+      var grp2=parseInt(time)<12?0:parseInt(time)<18?1:2;
+      if(prevG2>=0&&grp2!==prevG2) html+='<tr><td colspan="'+(1+saCols)+'" style="height:3px;background:#ccc;border:none"></td></tr>';
+      prevG2=grp2;
+      html+='<tr><td style="position:sticky;left:0;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px">'+time+'</td>';
+      var ds=getSlots('六',time);
+      for(var si=0;si<saCols;si++) html+=cellHTML(ds[si]||null,RH);
+      html+='</tr>';
+    });
+    html += '</tbody></table></div>';
+    gv.innerHTML = html;
+    return;
+  }
 
   html += '</tbody></table></div>';
   gv.innerHTML = html;
