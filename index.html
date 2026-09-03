@@ -2821,127 +2821,109 @@ function formalGridRender(){
     return;
   }
   var slots = hall==='北屯' ? SLOTS_B : SLOTS_X;
+  var SUBCOLS = hall==='北屯' ? 3 : 2;  // fixed sub-cols per day
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
-
-  // class colours
   var CC = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var TC = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
 
-  // ── Build columns: one per (day, cls, teacher), sorted day→firstTime ──
-  var colMap = {};
-  slots.forEach(function(sl){
-    var k = sl.day+'§'+sl.cls+'§'+sl.teacher;
-    if(!colMap[k]||sl.time<colMap[k]) colMap[k]=sl.time;
-  });
-  var cols = Object.keys(colMap).sort(function(a,b){
-    var pa=a.split('§'), pb=b.split('§');
-    var dd=(DO[pa[0]]||0)-(DO[pb[0]]||0);
-    return dd||colMap[a].localeCompare(colMap[b]);
-  });
-
-  // ── All unique times (rows) ──
-  var timeSet={};
-  slots.forEach(function(sl){ timeSet[sl.time]=true; });
+  // All unique days and times
+  var daySet={}, timeSet={};
+  slots.forEach(function(sl){ daySet[sl.day]=true; timeSet[sl.time]=true; });
+  var days  = Object.keys(daySet).sort(function(a,b){ return (DO[a]||0)-(DO[b]||0); });
   var times = Object.keys(timeSet).sort();
 
-  // ── Cell lookup: "day§time§cls§teacher" → students[] ──
-  var cellMap={};
+  // Lookup: "day§time" → [slot1, slot2, ...] sorted by cls
+  var slotMap={};
   slots.forEach(function(sl){
-    cellMap[sl.day+'§'+sl.time+'§'+sl.cls+'§'+sl.teacher]=sl.students;
+    var k=sl.day+'§'+sl.time;
+    if(!slotMap[k]) slotMap[k]=[];
+    slotMap[k].push(sl);
+  });
+  Object.keys(slotMap).forEach(function(k){
+    slotMap[k].sort(function(a,b){ return (a.cls+a.teacher).localeCompare(b.cls+b.teacher); });
   });
 
-  // ── Day groups for colspan ──
-  var dayGroups=[]; var prevDay=null;
-  cols.forEach(function(col){
-    var day=col.split('§')[0];
-    if(day!==prevDay){ dayGroups.push({day:day,count:1}); prevDay=day; }
-    else dayGroups[dayGroups.length-1].count++;
-  });
+  // Layout constants
+  var TIME_W  = 56;
+  var COL_W   = 72;
+  var ROW_H   = 6 * 21;  // 6 students × 21px
+  var HDR_H   = 22;       // class badge inside cell
 
-  // ── Row height = 6 students × 22px + header ──
-  var ROW_H = 6*22;   // px per time row
-  var COL_W = 80;     // px per class column
-  var TIME_W = 60;    // px for time column
+  var totalCols = days.length * SUBCOLS;
 
   var html = '<div style="overflow:auto;max-height:calc(100vh - 240px)">';
   html += '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
 
-  // ─── Row 1: day headers ───
-  html += '<colgroup><col style="width:'+TIME_W+'px"></colgroup>';
-  html += '<thead>';
-  html += '<tr>';
-  html += '<th rowspan="2" style="width:'+TIME_W+'px;border:1px solid #ccc;background:#f5f5f5;';
-  html += 'font-size:11px;color:#666;text-align:center;vertical-align:middle">時段</th>';
-  dayGroups.forEach(function(g){
-    html += '<th colspan="'+g.count+'" style="border:1px solid #ccc;background:#e8edf8;';
-    html += 'font-size:13px;font-weight:700;text-align:center;padding:6px 0">週'+g.day+'</th>';
+  // Col widths
+  html += '<colgroup><col style="width:'+TIME_W+'px">';
+  for(var i=0;i<days.length*SUBCOLS;i++) html += '<col style="width:'+COL_W+'px">';
+  html += '</colgroup>';
+
+  // ── Header row 1: day names ──
+  html += '<thead><tr>';
+  html += '<th rowspan="2" style="border:1px solid #ccc;background:#f5f5f5;font-size:11px;color:#666;text-align:center;vertical-align:middle">時段</th>';
+  days.forEach(function(day){
+    html += '<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;';
+    html += 'font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+day+'</th>';
   });
   html += '</tr>';
 
-  // ─── Row 2: class sub-headers ───
+  // ── Header row 2: "班別" labels ──
   html += '<tr>';
-  cols.forEach(function(col){
-    var parts=col.split('§'); var cls=parts[1]; var teacher=parts[2];
-    var bg=CC[cls]||'#eee'; var tc=TC[cls]||'#333';
-    html += '<th style="width:'+COL_W+'px;border:1px solid #ccc;background:'+bg+';';
-    html += 'font-size:11px;font-weight:600;text-align:center;padding:4px 2px">';
-    html += '<span style="display:inline-flex;align-items:center;justify-content:center;';
-    html += 'width:18px;height:18px;border-radius:50%;background:'+tc+';color:#fff;';
-    html += 'font-size:10px;font-weight:700;margin-right:3px">'+cls+'</span>';
-    html += '<span style="color:#555;font-size:10px">'+teacher+'</span>';
-    html += '</th>';
-  });
+  for(var i=0;i<days.length*SUBCOLS;i++){
+    html += '<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;';
+    html += 'font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
+  }
   html += '</tr></thead>';
 
-  // ─── Data rows ───
+  // ── Data rows ──
   html += '<tbody>';
-  var prevGrp = -1;
+  var prevGrp=-1;
   times.forEach(function(time){
-    var grp = parseInt(time)<12?0:parseInt(time)<18?1:2;
-    if(prevGrp>=0 && grp!==prevGrp){
-      html += '<tr><td colspan="'+(1+cols.length)+'" style="height:3px;background:#d0d0d0;border:none;padding:0"></td></tr>';
+    var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
+    if(prevGrp>=0&&grp!==prevGrp){
+      html += '<tr><td colspan="'+(1+days.length*SUBCOLS)+'" style="height:3px;background:#bbb;border:none;padding:0"></td></tr>';
     }
     prevGrp=grp;
 
     html += '<tr>';
-    // Time cell
+    // Time label
     html += '<td style="border:1px solid #ddd;background:#f8f8f8;text-align:center;';
     html += 'font-weight:700;font-size:12px;color:#333;vertical-align:middle;';
-    html += 'height:'+ROW_H+'px;padding:2px">'+time+'</td>';
+    html += 'height:'+(ROW_H+HDR_H)+'px">'+time+'</td>';
 
-    cols.forEach(function(col){
-      var parts=col.split('§'); var day=parts[0]; var cls=parts[1]; var teacher=parts[2];
-      var key=day+'§'+time+'§'+cls+'§'+teacher;
-      var students=cellMap[key];
-      var bg=CC[cls]||'#fff'; var tc=TC[cls]||'#333';
-
-      if(!students){
-        // No class at this time
-        html += '<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+ROW_H+'px"></td>';
-      } else {
-        html += '<td style="border:1px solid #ddd;background:#fff;vertical-align:top;';
-        html += 'height:'+ROW_H+'px;padding:0">';
-        // Class badge header inside cell
-        html += '<div style="background:'+bg+';padding:2px 4px;display:flex;align-items:center;';
-        html += 'gap:3px;border-bottom:1px solid #e0e0e0">';
-        html += '<span style="display:inline-flex;align-items:center;justify-content:center;';
-        html += 'width:16px;height:16px;border-radius:50%;background:'+tc+';color:#fff;';
-        html += 'font-size:9px;font-weight:700">'+cls+'</span>';
-        html += '<span style="font-size:10px;color:#555">'+teacher+'</span>';
-        html += '</div>';
-        // Students
-        students.forEach(function(s){
-          if(s.empty){
-            html += '<div style="height:22px;border-bottom:1px solid #f0f0f0;padding:2px 6px;';
-            html += 'font-size:11px;color:#ccc">—</div>';
-          } else {
-            var spec = s.special ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>' : '';
-            html += '<div style="height:22px;border-bottom:1px solid #f0f0f0;padding:2px 6px;';
-            html += 'font-size:12px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">';
-            html += s.name+spec+'</div>';
-          }
-        });
-        html += '</td>';
+    days.forEach(function(day){
+      var key=day+'§'+time;
+      var daySlots=slotMap[key]||[];
+      for(var si=0;si<SUBCOLS;si++){
+        var sl=daySlots[si]||null;
+        if(!sl){
+          // Empty sub-column
+          html += '<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+(ROW_H+HDR_H)+'px"></td>';
+        } else {
+          var bg=CC[sl.cls]||'#fff'; var tc=TC[sl.cls]||'#333';
+          html += '<td style="border:1px solid #ddd;background:#fff;vertical-align:top;height:'+(ROW_H+HDR_H)+'px;padding:0">';
+          // Mini class badge header inside cell
+          html += '<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;';
+          html += 'justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
+          html += '<span style="display:inline-flex;align-items:center;justify-content:center;';
+          html += 'width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;';
+          html += 'font-size:10px;font-weight:700">'+sl.cls+'</span>';
+          html += '<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
+          html += '</div>';
+          // Students
+          sl.students.forEach(function(s){
+            if(s.empty){
+              html += '<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
+            } else {
+              var spec = s.special ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>' : '';
+              html += '<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;';
+              html += 'font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">';
+              html += s.name+spec+'</div>';
+            }
+          });
+          html += '</td>';
+        }
       }
     });
     html += '</tr>';
