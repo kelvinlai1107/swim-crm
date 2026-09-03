@@ -1490,9 +1490,8 @@ function formalGridRender(){
   var BG  = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var FG  = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
   var TBG = '#EEF2FF';
-  var TW=56, CW=76, RH=154, HH=22; // time-width, col-width, row-height (6*21+22header), header-height
+  var TW=56, CW=76, RH=148, HH=22;
 
-  // Group slots
   var daySet={}, wdTS={}, saTS={};
   slots.forEach(function(sl){
     daySet[sl.day]=true;
@@ -1503,13 +1502,6 @@ function formalGridRender(){
   var wdTimes = Object.keys(wdTS).sort();
   var saTimes = Object.keys(saTS).sort();
 
-  // slot lookup by "day-time-cls-teacher"
-  var SM={};
-  slots.forEach(function(sl){
-    var k=sl.day+'-'+sl.time+'-'+sl.cls+'-'+sl.teacher;
-    SM[k]=sl;
-  });
-  // time->slots for a day
   function getSlots(day, time){
     var res=[];
     slots.forEach(function(sl){ if(sl.day===day&&sl.time===time) res.push(sl); });
@@ -1534,40 +1526,117 @@ function formalGridRender(){
     return h+'</td>';
   }
 
-  function buildTable(days, times, isSat){
-    var nc = days.length * SUBCOLS;
-    var t='<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;margin-right:'+(isSat?0:8)+'px">';
-    // colgroup
-    t+='<colgroup><col style="width:'+TW+'px">';
-    for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px">';
-    t+='</colgroup><thead>';
-    // day headers
-    t+='<tr><th rowspan="2" style="border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px">時段</th>';
-    days.forEach(function(d){
-      t+='<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
-    });
-    t+='</tr><tr>';
-    for(var i=0;i<nc;i++) t+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px">班別</th>';
-    t+='</tr></thead><tbody>';
-    // rows
-    var pg=-1;
-    times.forEach(function(time){
-      var g=parseInt(time)<12?0:parseInt(time)<18?1:2;
-      if(pg>=0&&g!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none"></td></tr>';
-      pg=g;
-      t+='<tr><td style="border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px;width:'+TW+'px">'+time+'</td>';
-      days.forEach(function(d){
-        var daySlots=getSlots(d,time);
-        for(var si=0;si<SUBCOLS;si++) t+=cellHTML(daySlots[si]||null, RH);
-      });
-      t+='</tr>';
-    });
-    return t+'</tbody></table>';
-  }
+  // ── Sticky header approach: ONE combined table, sticky thead + sticky time col ──
+  // Merge WD and SA into one table; SA section separated by a thick border column
+  var allDays = wdDays.concat(hasSat ? ['六'] : []);
+  // Build unified time list: WD times + SA-only times interleaved by order
+  var allTimeSet={};
+  slots.forEach(function(sl){ allTimeSet[sl.time]=true; });
+  var allTimes = Object.keys(allTimeSet).sort();
+  // WD rows: times that appear in WD data
+  // SA rows: times that ONLY appear in SA
+  var wdTimeSet2={}, saTimeSet2={};
+  slots.forEach(function(sl){
+    if(sl.day==='六') saTimeSet2[sl.time]=true;
+    else wdTimeSet2[sl.time]=true;
+  });
 
-  var wdTable = buildTable(wdDays, wdTimes, false);
-  var saTable = hasSat ? buildTable(['六'], saTimes, true) : '';
-  gv.innerHTML='<div style="display:flex;align-items:flex-start">'+wdTable+saTable+'</div>';
+  // Calculate sticky left offsets for each column
+  // Col 0 = time col (sticky left:0)
+  // If hasSat, we insert a separator col + SA time col + SA class cols
+  var wdCols = wdDays.length * SUBCOLS;
+  var saCols = hasSat ? SUBCOLS : 0;
+
+  // Total cols: 1(time) + wdCols + [1(separator) + 1(sa-time) + saCols] if hasSat
+  var totalCols = 1 + wdCols + (hasSat ? 2 + saCols : 0);
+
+  var html = '<div style="overflow:auto;max-height:calc(100vh - 230px);position:relative">';
+  html += '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
+
+  // colgroup
+  html += '<colgroup>';
+  html += '<col style="width:'+TW+'px">';                    // time col
+  for(var i=0;i<wdCols;i++) html += '<col style="width:'+CW+'px">';
+  if(hasSat){
+    html += '<col style="width:4px">';                        // separator
+    html += '<col style="width:'+TW+'px">';                   // SA time col
+    for(var i=0;i<saCols;i++) html += '<col style="width:'+CW+'px">';
+  }
+  html += '</colgroup>';
+
+  // ── Header row 1: day names ──
+  html += '<thead style="position:sticky;top:0;z-index:10">';
+  html += '<tr>';
+  // Sticky time header cell
+  html += '<th rowspan="2" style="position:sticky;left:0;z-index:20;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px;min-width:'+TW+'px">時段</th>';
+  // WD day headers
+  wdDays.forEach(function(d){
+    html += '<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
+  });
+  // SA separator + header
+  if(hasSat){
+    html += '<th rowspan="2" style="width:4px;padding:0;border:none;background:#ddd"></th>';
+    html += '<th rowspan="2" style="border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px">時段</th>';
+    html += '<th colspan="'+saCols+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
+  }
+  html += '</tr>';
+
+  // ── Header row 2: 班別 labels ──
+  html += '<tr>';
+  for(var i=0;i<wdCols;i++) html += '<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px">班別</th>';
+  if(hasSat){
+    for(var i=0;i<saCols;i++) html += '<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px">班別</th>';
+  }
+  html += '</tr></thead><tbody>';
+
+  // ── Data rows ──
+  // WD rows (times with WD classes)
+  var prevGrp = -1;
+  wdTimes.forEach(function(time){
+    var grp = parseInt(time)<12?0:parseInt(time)<18?1:2;
+    if(prevGrp>=0&&grp!==prevGrp) html+='<tr><td colspan="'+totalCols+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
+    prevGrp=grp;
+    html += '<tr>';
+    // Sticky time cell
+    html += '<td style="position:sticky;left:0;z-index:5;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px">'+time+'</td>';
+    // WD class cells
+    wdDays.forEach(function(d){
+      var ds=getSlots(d,time);
+      for(var si=0;si<SUBCOLS;si++) html+=cellHTML(ds[si]||null,RH);
+    });
+    // SA section for this WD time
+    if(hasSat){
+      html += '<td style="width:4px;padding:0;border:none;background:#ddd"></td>';
+      // SA time cell - show time if SA also has this time
+      var saHasTime = !!saTimeSet2[time];
+      html += '<td style="border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:'+(saHasTime?'#333':'#ccc')+';vertical-align:middle;width:'+TW+'px">'+(saHasTime?time:'')+'</td>';
+      var saDS = saHasTime ? getSlots('六',time) : [];
+      for(var si=0;si<saCols;si++) html+=cellHTML(saDS[si]||null,RH);
+    }
+    html += '</tr>';
+  });
+
+  // SA-only rows (times ONLY in SA, not in WD)
+  var saOnlyTimes = saTimes.filter(function(t){ return !wdTimeSet2[t]; });
+  saOnlyTimes.forEach(function(time){
+    var grp = parseInt(time)<12?0:parseInt(time)<18?1:2;
+    if(prevGrp>=0&&grp!==prevGrp) html+='<tr><td colspan="'+totalCols+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
+    prevGrp=grp;
+    html += '<tr>';
+    // Time col (empty for WD side)
+    html += '<td style="position:sticky;left:0;z-index:5;border:1px solid #ccc;background:'+TBG+';text-align:center;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px"></td>';
+    // WD class cols (all empty)
+    for(var i=0;i<wdCols;i++) html+='<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+RH+'px"></td>';
+    // SA section
+    html += '<td style="width:4px;padding:0;border:none;background:#ddd"></td>';
+    html += '<td style="border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;width:'+TW+'px">'+time+'</td>';
+    var saDS=getSlots('六',time);
+    for(var si=0;si<saCols;si++) html+=cellHTML(saDS[si]||null,RH);
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  gv.innerHTML = html;
 }
 
 </script>
