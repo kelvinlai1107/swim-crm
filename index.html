@@ -636,7 +636,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -661,6 +661,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -844,7 +856,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -869,6 +881,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -1052,7 +1076,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -1077,6 +1101,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -1260,7 +1296,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -1285,6 +1321,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -1468,7 +1516,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -1493,6 +1541,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -1676,7 +1736,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -1701,6 +1761,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -1884,7 +1956,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -1909,6 +1981,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
@@ -2092,7 +2176,7 @@ window.addEventListener("load", function(){
       redirectUri: MSAL_REDIRECT,
       navigateToLoginRequestUrl: true
     },
-    cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:true }
+    cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
 
   document.getElementById("msal-loading").classList.add("show");
@@ -2117,6 +2201,18 @@ window.addEventListener("load", function(){
     })
     .catch(function(err){
       console.error("MSAL init error:", err);
+      // state_not_found = stale redirect state in sessionStorage → clear and retry
+      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
+        // Clear all MSAL keys from sessionStorage
+        Object.keys(sessionStorage).forEach(function(k){
+          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
+        });
+        // Also clear the URL hash/query so MSAL doesn't try to process it again
+        if(window.history && window.history.replaceState){
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        // Show login screen (user clicks again to re-initiate)
+      }
       document.getElementById("msal-loading").classList.remove("show");
       document.getElementById("msal-login-screen").classList.add("show");
     });
