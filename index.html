@@ -634,56 +634,42 @@ window.addEventListener("load", function(){
       clientId: MSAL_CLIENT_ID,
       authority: "https://login.microsoftonline.com/" + MSAL_TENANT_ID,
       redirectUri: MSAL_REDIRECT,
-      navigateToLoginRequestUrl: true
     },
     cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
   });
-
-  document.getElementById("msal-loading").classList.add("show");
-
-  _msalApp.handleRedirectPromise()
-    .then(function(resp){
-      if(resp && resp.account){
-        _msalEmail = (resp.account.username||"").toLowerCase();
-        _msalName  = resp.account.name || resp.account.username;
-        msalApplyAccess();
-        return;
-      }
-      var accounts = _msalApp.getAllAccounts();
-      if(accounts.length > 0){
-        _msalEmail = (accounts[0].username||"").toLowerCase();
-        _msalName  = accounts[0].name || accounts[0].username;
-        if(getUserRole(_msalEmail) !== "none"){ msalApplyAccess(); return; }
-      }
-      // Not signed in
-      document.getElementById("msal-loading").classList.remove("show");
-      document.getElementById("msal-login-screen").classList.add("show");
-    })
-    .catch(function(err){
-      console.error("MSAL init error:", err);
-      // state_not_found = stale redirect state in sessionStorage → clear and retry
-      if(err.errorCode === 'state_not_found' || (err.message && err.message.indexOf('state_not_found') >= 0)){
-        // Clear all MSAL keys from sessionStorage
-        Object.keys(sessionStorage).forEach(function(k){
-          if(k.indexOf('msal') >= 0 || k.indexOf('login') >= 0) sessionStorage.removeItem(k);
-        });
-        // Also clear the URL hash/query so MSAL doesn't try to process it again
-        if(window.history && window.history.replaceState){
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-        // Show login screen (user clicks again to re-initiate)
-      }
-      document.getElementById("msal-loading").classList.remove("show");
-      document.getElementById("msal-login-screen").classList.add("show");
-    });
+  var accounts = _msalApp.getAllAccounts();
+  if(accounts.length > 0){
+    _msalEmail = (accounts[0].username||"").toLowerCase();
+    _msalName  = accounts[0].name || accounts[0].username;
+    if(getUserRole(_msalEmail) !== "none"){ msalApplyAccess(); return; }
+  }
+  document.getElementById("msal-login-screen").classList.add("show");
 });
 
+
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -899,11 +885,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -1119,11 +1122,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -1339,11 +1359,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -1559,11 +1596,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -1779,11 +1833,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -1999,11 +2070,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
@@ -2219,11 +2307,28 @@ window.addEventListener("load", function(){
 });
 
 function msalSignIn(){
-  _msalApp.loginRedirect({ scopes:["User.Read","openid","profile"] });
+  document.getElementById("msal-loading").classList.add("show");
+  _msalApp.loginPopup({ scopes:["User.Read","openid","profile"] })
+    .then(function(resp){
+      _msalEmail = (resp.account.username||"").toLowerCase();
+      _msalName  = resp.account.name || resp.account.username;
+      msalApplyAccess();
+    })
+    .catch(function(err){
+      document.getElementById("msal-loading").classList.remove("show");
+      if(err && err.errorCode !== "user_cancelled"){
+        alert("登入失敗，請再試一次。");
+      }
+    });
 }
 
 function msalSignOut(){
-  _msalApp.logoutRedirect({ postLogoutRedirectUri: MSAL_REDIRECT });
+  _msalApp.logoutPopup().then(function(){
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf("msal")>=0) localStorage.removeItem(k);
+    });
+    location.reload();
+  }).catch(function(){ location.reload(); });
 }
 
 function msalApplyAccess(){
