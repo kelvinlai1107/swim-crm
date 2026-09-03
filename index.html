@@ -1396,14 +1396,6 @@ function formalSwitchView(view){
     t.classList.toggle('active', t.dataset.view===view);
   });
   if(view==='grid'){
-    // Grid requires a specific hall - auto-select 西屯 if none selected
-    var hSel = document.getElementById('f-formal-hall');
-    if(hSel && !hSel.value){
-      hSel.value = '西屯';
-      document.querySelectorAll('.formal-hall-btn').forEach(function(b){
-        b.classList.toggle('active', b.dataset.hall==='西屯');
-      });
-    }
     formalGridRender();
   } else {
     formalRender();
@@ -1411,6 +1403,10 @@ function formalSwitchView(view){
 }
 
 function formalInit(){
+  _formalHall = '';
+  document.querySelectorAll('.formal-hall-btn').forEach(function(b){ b.classList.remove('active'); });
+  var allBtn = document.querySelector('.formal-hall-btn[data-hall=""]');
+  if(allBtn) allBtn.classList.add('active');
   var teachers = {};
   (SEAT_X||[]).concat(SEAT_B||[]).forEach(function(r){ if(r.teacher) teachers[r.teacher]=true; });
   var sel = document.getElementById('f-formal-teacher');
