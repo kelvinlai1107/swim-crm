@@ -409,7 +409,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 
   <!-- 劃位表視圖 -->
   <div id="formal-grid-view" style="display:none;overflow-x:auto;padding-bottom:20px">
-    <div id="formal-grid-body" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;padding:4px 0"></div>
+    <div id="formal-grid-body"></div>
   </div>
 </div>
 
@@ -609,6 +609,8 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <script>
+// ── Config ───────────────────────────────────────────────────────────────
+var 
 // ── Config ───────────────────────────────────────────────────────────────
 var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
 var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
@@ -2613,90 +2615,133 @@ function formalRender(){
 
 function formalGridRender(){
   if(typeof SLOTS_X==='undefined'||typeof SLOTS_B==='undefined') return;
-  var hall = _formalHall || (document.getElementById('f-formal-hall')||{}).value||'';
-  // Must select a specific hall for grid view
+  var hall = _formalHall || '';
   if(!hall){
     var gv=document.getElementById('formal-grid-body');
     if(gv) gv.innerHTML='<div style="padding:32px;text-align:center;color:var(--tx3);font-size:14px">請先選擇 <strong>A01 西屯館</strong> 或 <strong>A02 北屯館</strong> 再檢視劃位表</div>';
     return;
   }
   var slots = hall==='北屯' ? SLOTS_B : SLOTS_X;
-  var CC = {A:'t-tl',B:'t-tl',N:'t-tl',C:'t-bl',D:'t-bl',E:'t-am',F:'t-am'};
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
+  var CC = {A:'#FFD0D0',B:'#FFD0D0',N:'#FFD0D0',C:'#FFF3C0',D:'#FFF3C0',E:'#D4EFDF',F:'#D8EAF8'};
+  var TC = {A:'#C00',B:'#C00',N:'#C00',C:'#886600',D:'#886600',E:'#1a6e3c',F:'#1550a0'};
 
-  // Group by day
-  var byDay = {};
+  // ── Build col headers: (day, cls, teacher) sorted by day then first-time ──
+  var colMap = {};  // "day|cls|teacher" → firstTime
   slots.forEach(function(sl){
-    if(!byDay[sl.day]) byDay[sl.day]=[];
-    byDay[sl.day].push(sl);
+    var k = sl.day+'|'+sl.cls+'|'+sl.teacher;
+    if(!colMap[k] || sl.time < colMap[k]) colMap[k] = sl.time;
   });
-  var days = Object.keys(byDay).sort(function(a,b){ return (DO[a]||0)-(DO[b]||0); });
-
-  // Find all unique times across all days (for row alignment)
-  var allTimes = {};
-  days.forEach(function(day){
-    byDay[day].forEach(function(sl){ allTimes[sl.time]=true; });
+  var cols = Object.keys(colMap).sort(function(a,b){
+    var pa=a.split('|'), pb=b.split('|');
+    var dd=(DO[pa[0]]||0)-(DO[pb[0]]||0);
+    if(dd) return dd;
+    return colMap[a].localeCompare(colMap[b]);
   });
-  var timeList = Object.keys(allTimes).sort();
 
-  // Build table: rows=times, cols=days
-  // Each cell can have multiple slots (same time, different class/teacher)
-  var html = '<div style="display:flex;gap:8px;align-items:flex-start">';
+  // ── Build row headers: all unique times ──
+  var timeSet={};
+  slots.forEach(function(sl){ timeSet[sl.time]=true; });
+  var times = Object.keys(timeSet).sort();
 
-  days.forEach(function(day){
-    html += '<div style="flex:0 0 auto;width:200px">';
-    // Day header
-    html += '<div style="font-size:14px;font-weight:700;text-align:center;';
-    html += 'padding:6px 0 10px;border-bottom:2px solid var(--bd2);margin-bottom:8px">週'+day+'</div>';
+  // ── Build lookup: "day|time|cls|teacher" → [students] ──
+  var cellMap={};
+  slots.forEach(function(sl){
+    var k = sl.day+'|'+sl.time+'|'+sl.cls+'|'+sl.teacher;
+    cellMap[k] = sl.students;
+  });
 
-    // For each time, show all classes at that time for this day
-    timeList.forEach(function(time){
-      var timeSlots = byDay[day] ? byDay[day].filter(function(sl){ return sl.time===time; }) : [];
-      if(!timeSlots.length) return; // skip times not in this day
+  // ── Group cols by day for header spanning ──
+  var dayGroups = [];  // [{day, start, count}]
+  var prevDay = null;
+  cols.forEach(function(col, i){
+    var day = col.split('|')[0];
+    if(day !== prevDay){ dayGroups.push({day:day, start:i, count:1}); prevDay=day; }
+    else { dayGroups[dayGroups.length-1].count++; }
+  });
 
-      // Time label
-      html += '<div style="font-size:11px;font-weight:600;color:var(--tx3);background:var(--sf2);';
-      html += 'padding:2px 8px;border-radius:4px;margin-bottom:4px">'+time+'</div>';
+  // ── Detect time groups (morning/afternoon/evening) ──
+  function timeGroup(t){
+    var h=parseInt(t);
+    if(h<12) return 0;
+    if(h<18) return 1;
+    return 2;
+  }
 
-      timeSlots.forEach(function(sl){
-        var filled = sl.students.filter(function(s){ return !s.empty; }).length;
-        var clsColor = CC[sl.cls]||'t-gy';
-        // Slot card
-        html += '<div style="border:1px solid var(--bd);border-radius:8px;margin-bottom:6px;overflow:hidden">';
-        // Card header
-        html += '<div style="background:var(--sf2);padding:4px 8px;display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--bd)">';
-        html += '<span class="tag '+clsColor+'" style="font-size:10px">'+sl.cls+'班</span>';
-        html += '<span style="font-size:11px;color:var(--tx3)">'+sl.teacher+'</span>';
-        html += '<span style="margin-left:auto;font-size:10px;color:'+(filled<sl.students.length?'var(--am)':'var(--tx3)')+'">'+filled+'/'+sl.students.length+'</span>';
-        html += '</div>';
-        // Students
-        sl.students.forEach(function(s){
+  // ── Render table ──
+  var cellW = 62;  // px per class column
+  var timeW = 52;  // px for time column
+
+  var html = '<div style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 260px)">';
+  html += '<table style="border-collapse:collapse;font-size:11px;min-width:'+(timeW + cols.length*cellW)+'px">';
+
+  // Row 1: day group headers
+  html += '<thead><tr>';
+  html += '<th rowspan="2" style="width:'+timeW+'px;min-width:'+timeW+'px;border:1px solid #ccc;background:#f8f8f8;font-size:11px;font-weight:600;color:#666;text-align:center">時段</th>';
+  dayGroups.forEach(function(g){
+    html += '<th colspan="'+g.count+'" style="border:1px solid #ccc;background:#f0f4ff;font-size:12px;font-weight:700;text-align:center;padding:5px 0">週'+g.day+'</th>';
+  });
+  html += '</tr>';
+
+  // Row 2: class+teacher sub-headers
+  html += '<tr>';
+  cols.forEach(function(col){
+    var parts=col.split('|'), cls=parts[1], teacher=parts[2];
+    var bg=CC[cls]||'#eee', tc=TC[cls]||'#333';
+    html += '<th style="width:'+cellW+'px;min-width:'+cellW+'px;border:1px solid #ccc;background:'+bg+';';
+    html += 'font-size:10px;font-weight:600;color:'+tc+';text-align:center;padding:3px 1px;white-space:nowrap">';
+    html += '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:'+tc+';color:#fff;line-height:16px;text-align:center;margin-right:2px;font-size:9px">'+cls+'</span>';
+    html += '<span style="color:#666;font-size:9px">'+teacher+'</span>';
+    html += '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  // Data rows
+  var prevGroup = -1;
+  times.forEach(function(time){
+    var grp = timeGroup(time);
+    // Separator between time groups
+    if(prevGroup >= 0 && grp !== prevGroup){
+      html += '<tr><td colspan="'+(1+cols.length)+'" style="height:4px;background:#e8e8e8;border:none"></td></tr>';
+    }
+    prevGroup = grp;
+
+    html += '<tr>';
+    // Time cell
+    html += '<td style="border:1px solid #ddd;background:#f8f8f8;text-align:center;font-weight:600;';
+    html += 'font-size:11px;color:#444;padding:2px;white-space:nowrap">'+time+'</td>';
+
+    // Class cells
+    cols.forEach(function(col){
+      var parts=col.split('|'), day=parts[0], cls=parts[1], teacher=parts[2];
+      var cellKey=day+'|'+time+'|'+cls+'|'+teacher;
+      var students=cellMap[cellKey];
+      var bg=CC[cls]||'#f9f9f9', tc=TC[cls]||'#333';
+
+      if(!students){
+        // Empty cell (this class doesn't run at this time)
+        html += '<td style="border:1px solid #e8e8e8;background:#fafafa"></td>';
+      } else {
+        html += '<td style="border:1px solid #ddd;background:#fff;vertical-align:top;padding:1px 0">';
+        students.forEach(function(s){
           if(s.empty){
-            html += '<div style="padding:2px 8px;font-size:11px;color:var(--bd2);border-bottom:1px solid var(--bd);min-height:22px;display:flex;align-items:center;gap:4px">';
-            html += '<span style="font-size:10px;color:var(--bd2);width:14px">'+s.order+'</span>';
-            html += '<span>—</span></div>';
+            html += '<div style="padding:1px 4px;min-height:20px;border-bottom:1px solid #f0f0f0;color:#ccc;font-size:10px">—</div>';
           } else {
-            var spec = s.special ? ' <span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:8px;font-weight:700;border:1px solid #F0A060;vertical-align:middle">特</span>' : '';
-            var upg = (s.upgrade&&s.upgrade!==''&&s.upgrade!=='0'&&s.upgrade!=='-'&&s.upgrade.indexOf('N/A')<0)
-              ? ' <span class="tag t-tl" style="font-size:9px">升'+s.upgrade+'</span>' : '';
-            html += '<div style="padding:2px 8px;font-size:11px;color:var(--tx);border-bottom:1px solid var(--bd);min-height:22px;display:flex;align-items:center;gap:4px">';
-            html += '<span style="font-size:10px;color:var(--tx3);width:14px;flex-shrink:0">'+s.order+'</span>';
-            html += '<span style="font-weight:500;flex:1">'+s.name+spec+'</span>';
-            if(upg) html += upg;
+            var spec = s.special ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle;flex-shrink:0">特</span>' : '';
+            html += '<div style="padding:1px 4px;border-bottom:1px solid #f0f0f0;font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(cellW-8)+'px">';
+            html += s.name + spec;
             html += '</div>';
           }
         });
-        html += '</div>'; // slot card
-      });
+        html += '</td>';
+      }
     });
-    html += '</div>'; // day col
+    html += '</tr>';
   });
-  html += '</div>';
+
+  html += '</tbody></table></div>';
 
   var gv = document.getElementById('formal-grid-body');
   if(gv) gv.innerHTML = html;
 }
 
-</script>
-</body>
-</html>
