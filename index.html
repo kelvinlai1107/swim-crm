@@ -687,6 +687,7 @@ function msalApplyAccess(){
 }
 
 function applyRoleUI(role, email, name){
+  if(document.querySelector(".user-chip")) return; // already applied
   var avEl   = document.querySelector(".av");
   var nameEl = document.querySelector(".u-area span");
   if(avEl)   avEl.textContent  = (name||"?").slice(0,2);
@@ -2821,18 +2822,35 @@ function formalGridRender(){
     return;
   }
   var slots = hall==='北屯' ? SLOTS_B : SLOTS_X;
-  var SUBCOLS = hall==='北屯' ? 3 : 2;  // fixed sub-cols per day
+  var SUBCOLS = hall==='北屯' ? 3 : 2;
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var CC = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var TC = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
 
-  // All unique days and times
-  var daySet={}, timeSet={};
-  slots.forEach(function(sl){ daySet[sl.day]=true; timeSet[sl.time]=true; });
-  var days  = Object.keys(daySet).sort(function(a,b){ return (DO[a]||0)-(DO[b]||0); });
-  var times = Object.keys(timeSet).sort();
+  // Split days into weekdays (二-五) and Saturday (六)
+  var WD_DAYS = ['二','三','四','五'];
+  var SA_DAYS = ['六'];
+  var allDays = WD_DAYS.concat(SA_DAYS).filter(function(d){
+    return slots.some(function(sl){ return sl.day===d; });
+  });
+  var wdDays = allDays.filter(function(d){ return d!=='六'; });
+  var hasSat = slots.some(function(sl){ return sl.day==='六'; });
 
-  // Lookup: "day§time" → [slot1, slot2, ...] sorted by cls
+  // Times for each section
+  var wdTimeSet={}, saTimeSet={};
+  slots.forEach(function(sl){
+    if(sl.day==='六') saTimeSet[sl.time]=true;
+    else wdTimeSet[sl.time]=true;
+  });
+  var wdTimes = Object.keys(wdTimeSet).sort();
+  var saTimes = Object.keys(saTimeSet).sort();
+  // All rows = union, but we'll show time in the appropriate column
+  var allTimes = [];
+  var seen={};
+  wdTimes.concat(saTimes).forEach(function(t){ if(!seen[t]){seen[t]=true;allTimes.push(t);} });
+  allTimes.sort();
+
+  // Lookup: "day§time" → slots[]
   var slotMap={};
   slots.forEach(function(sl){
     var k=sl.day+'§'+sl.time;
@@ -2843,92 +2861,123 @@ function formalGridRender(){
     slotMap[k].sort(function(a,b){ return (a.cls+a.teacher).localeCompare(b.cls+b.teacher); });
   });
 
-  // Layout constants
-  var TIME_W  = 56;
-  var COL_W   = 72;
-  var ROW_H   = 6 * 21;  // 6 students × 21px
-  var HDR_H   = 22;       // class badge inside cell
+  var TIME_W=56, COL_W=74, ROW_H=6*21, HDR_H=22;
+  var wdCols = wdDays.length * SUBCOLS;
+  var saCols = hasSat ? SUBCOLS : 0;
+  var totalCols = 1 + wdCols + (hasSat ? 1 + saCols : 0); // time + wd cols + [sat-time + sat cols]
 
-  var totalCols = days.length * SUBCOLS;
+  var html='<div style="overflow:auto;max-height:calc(100vh - 240px)">';
+  html+='<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
 
-  var html = '<div style="overflow:auto;max-height:calc(100vh - 240px)">';
-  html += '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
-
-  // Col widths
-  html += '<colgroup><col style="width:'+TIME_W+'px">';
-  for(var i=0;i<days.length*SUBCOLS;i++) html += '<col style="width:'+COL_W+'px">';
-  html += '</colgroup>';
-
-  // ── Header row 1: day names ──
-  html += '<thead><tr>';
-  html += '<th rowspan="2" style="border:1px solid #ccc;background:#f5f5f5;font-size:11px;color:#666;text-align:center;vertical-align:middle">時段</th>';
-  days.forEach(function(day){
-    html += '<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;';
-    html += 'font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+day+'</th>';
-  });
-  html += '</tr>';
-
-  // ── Header row 2: "班別" labels ──
-  html += '<tr>';
-  for(var i=0;i<days.length*SUBCOLS;i++){
-    html += '<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;';
-    html += 'font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
+  // Colgroup
+  html+='<colgroup><col style="width:'+TIME_W+'px">';
+  for(var i=0;i<wdCols;i++) html+='<col style="width:'+COL_W+'px">';
+  if(hasSat){
+    html+='<col style="width:'+TIME_W+'px">';
+    for(var i=0;i<saCols;i++) html+='<col style="width:'+COL_W+'px">';
   }
-  html += '</tr></thead>';
+  html+='</colgroup>';
+
+  // ── Header row 1 ──
+  html+='<thead><tr>';
+  html+='<th rowspan="2" style="border:1px solid #ccc;background:#f5f5f5;font-size:11px;color:#666;text-align:center;vertical-align:middle">時段</th>';
+  wdDays.forEach(function(day){
+    html+='<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+day+'</th>';
+  });
+  if(hasSat){
+    html+='<th rowspan="2" style="border:2px solid #aaa;background:#f0f0f8;font-size:11px;color:#666;text-align:center;vertical-align:middle">時段</th>';
+    html+='<th colspan="'+saCols+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
+  }
+  html+='</tr>';
+
+  // ── Header row 2 ──
+  html+='<tr>';
+  for(var i=0;i<wdCols;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
+  if(hasSat){
+    for(var i=0;i<saCols;i++) html+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;font-weight:500;color:#888;text-align:center;padding:3px 0">班別</th>';
+  }
+  html+='</tr></thead>';
 
   // ── Data rows ──
-  html += '<tbody>';
+  // We need rows for both wd times and sa times
+  // Show all times; for each row, show time in wd time col if it's a wd time, else show blank
+  // Similarly for Saturday
+
+  html+='<tbody>';
   var prevGrp=-1;
-  times.forEach(function(time){
+  allTimes.forEach(function(time){
     var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
     if(prevGrp>=0&&grp!==prevGrp){
-      html += '<tr><td colspan="'+(1+days.length*SUBCOLS)+'" style="height:3px;background:#bbb;border:none;padding:0"></td></tr>';
+      html+='<tr><td colspan="'+totalCols+'" style="height:3px;background:#bbb;border:none;padding:0"></td></tr>';
     }
     prevGrp=grp;
 
-    html += '<tr>';
-    // Time label
-    html += '<td style="border:1px solid #ddd;background:#f8f8f8;text-align:center;';
-    html += 'font-weight:700;font-size:12px;color:#333;vertical-align:middle;';
-    html += 'height:'+(ROW_H+HDR_H)+'px">'+time+'</td>';
+    var isWdTime = !!wdTimeSet[time];
+    var isSaTime = hasSat && !!saTimeSet[time];
 
-    days.forEach(function(day){
+    html+='<tr>';
+    // WD time cell
+    html+='<td style="border:1px solid #ddd;background:#f8f8f8;text-align:center;font-weight:700;font-size:12px;color:'+(isWdTime?'#333':'#ccc')+';vertical-align:middle;height:'+(ROW_H+HDR_H)+'px">'+(isWdTime?time:'')+'</td>';
+
+    // WD class cols
+    wdDays.forEach(function(day){
       var key=day+'§'+time;
-      var daySlots=slotMap[key]||[];
+      var daySlots=isWdTime?(slotMap[key]||[]):[];
       for(var si=0;si<SUBCOLS;si++){
         var sl=daySlots[si]||null;
         if(!sl){
-          // Empty sub-column
-          html += '<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+(ROW_H+HDR_H)+'px"></td>';
+          html+='<td style="border:1px solid #e8e8e8;background:#fafafa;height:'+(ROW_H+HDR_H)+'px"></td>';
         } else {
           var bg=CC[sl.cls]||'#fff'; var tc=TC[sl.cls]||'#333';
-          html += '<td style="border:1px solid #ddd;background:#fff;vertical-align:top;height:'+(ROW_H+HDR_H)+'px;padding:0">';
-          // Mini class badge header inside cell
-          html += '<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;';
-          html += 'justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
-          html += '<span style="display:inline-flex;align-items:center;justify-content:center;';
-          html += 'width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;';
-          html += 'font-size:10px;font-weight:700">'+sl.cls+'</span>';
-          html += '<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
-          html += '</div>';
-          // Students
+          html+='<td style="border:1px solid #ddd;background:#fff;vertical-align:top;height:'+(ROW_H+HDR_H)+'px;padding:0">';
+          html+='<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
+          html+='<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;font-size:10px;font-weight:700">'+sl.cls+'</span>';
+          html+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
+          html+='</div>';
           sl.students.forEach(function(s){
             if(s.empty){
-              html += '<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
+              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
             } else {
-              var spec = s.special ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>' : '';
-              html += '<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;';
-              html += 'font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">';
-              html += s.name+spec+'</div>';
+              var spec=s.special?'<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>':'';
+              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+spec+'</div>';
             }
           });
-          html += '</td>';
+          html+='</td>';
         }
       }
     });
-    html += '</tr>';
+
+    // Saturday section
+    if(hasSat){
+      html+='<td style="border:2px solid #aaa;background:#f0f0f8;text-align:center;font-weight:700;font-size:12px;color:'+(isSaTime?'#333':'#ccc')+';vertical-align:middle">'+(isSaTime?time:'')+'</td>';
+      var saKey='六§'+time;
+      var saSlots=isSaTime?(slotMap[saKey]||[]):[];
+      for(var si=0;si<SUBCOLS;si++){
+        var sl=saSlots[si]||null;
+        if(!sl){
+          html+='<td style="border:1px solid #e8e8e8;background:#fafafa"></td>';
+        } else {
+          var bg=CC[sl.cls]||'#fff'; var tc=TC[sl.cls]||'#333';
+          html+='<td style="border:1px solid #ddd;background:#fff;vertical-align:top;padding:0">';
+          html+='<div style="background:'+bg+';height:'+HDR_H+'px;display:flex;align-items:center;justify-content:center;gap:3px;border-bottom:1.5px solid #ccc">';
+          html+='<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+tc+';color:#fff;font-size:10px;font-weight:700">'+sl.cls+'</span>';
+          html+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
+          html+='</div>';
+          sl.students.forEach(function(s){
+            if(s.empty){
+              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
+            } else {
+              var spec=s.special?'<span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;vertical-align:middle">特</span>':'';
+              html+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+spec+'</div>';
+            }
+          });
+          html+='</td>';
+        }
+      }
+    }
+    html+='</tr>';
   });
-  html += '</tbody></table></div>';
+  html+='</tbody></table></div>';
 
   var gv=document.getElementById('formal-grid-body');
   if(gv) gv.innerHTML=html;
