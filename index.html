@@ -357,6 +357,10 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     <span class="ni-label">正式生</span>
     <span class="nb" id="nb-formal" style="margin-left:auto"></span>
   </div>
+  <div class="ni" id="ni-classmgmt" onclick="G('classmgmt')" style="padding-left:28px;font-size:12px">
+    <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M5 8h6M5 5h6M5 11h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <span class="ni-label">班級管理</span>
+  </div>
   <div class="ni" id="ni-ncc" onclick="G('ncc')"><svg width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M13 12.5a5 5 0 10-10 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="6" r="2.5" stroke="currentColor" stroke-width="1.3"/></svg><span class="ni-label">NCC 體驗追蹤</span><span class="nb">7</span></div>
   <div class="ni" id="ni-package" onclick="G('package')"><svg width="16" height="16" fill="none" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><span class="ni-label">套票生管理</span></div>
   <div class="ni" id="ni-renewal" onclick="G('renewal')"><svg width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M2 8h3l1-4 2 8 1-4h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 3a1 1 0 11-2 0 1 1 0 012 0z" fill="currentColor"/></svg><span class="ni-label">續報作業</span><span class="nb-am">450</span></div>
@@ -372,6 +376,72 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 </div>
 <div class="main">
 
+<div id="pg-classmgmt" style="display:none">
+  <div class="ph">
+    <div class="pt">班級管理</div>
+    <div class="ps" id="classmgmt-count"></div>
+  </div>
+  <div class="tb" style="margin-bottom:12px">
+    <select class="fs" id="cm-hall" onchange="cmRender()">
+      <option value="X">西屯館</option>
+      <option value="B">北屯館</option>
+    </select>
+    <button class="btn bp sm" onclick="cmOpenAdd()">＋ 新增班次</button>
+  </div>
+  <div id="cm-table-wrap" style="overflow-x:auto">
+    <table class="stu-tbl" id="cm-table">
+      <thead><tr>
+        <th style="width:48px">星期</th>
+        <th style="width:60px">時段</th>
+        <th style="width:48px">班別</th>
+        <th style="width:64px">老師</th>
+        <th style="width:48px">人數</th>
+        <th style="width:48px">操作</th>
+      </tr></thead>
+      <tbody id="cm-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 班級管理 - 新增/編輯 Modal -->
+<div class="mgmt-ov" id="cm-modal">
+  <div class="mgmt-pn" style="width:380px">
+    <div class="mgmt-hd">
+      <span id="cm-modal-title" style="font-size:15px;font-weight:700">新增班次</span>
+      <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById('cm-modal').classList.remove('open')">×</button>
+    </div>
+    <div class="mgmt-bd" style="display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="cm-edit-idx">
+      <label style="font-size:13px;font-weight:500">星期
+        <select class="fs" id="cm-day" style="width:100%;margin-top:4px">
+          <option value="二">週二</option><option value="三">週三</option>
+          <option value="四">週四</option><option value="五">週五</option><option value="六">週六</option>
+        </select>
+      </label>
+      <label style="font-size:13px;font-weight:500">時段（格式 09:30）
+        <input class="si" id="cm-time" placeholder="09:30" style="width:100%;margin-top:4px">
+      </label>
+      <label style="font-size:13px;font-weight:500">班別
+        <select class="fs" id="cm-cls" style="width:100%;margin-top:4px">
+          <option value="A">A 親子</option><option value="B">B 親子</option>
+          <option value="C">C 幼兒</option><option value="D">D 幼兒</option>
+          <option value="E">E 兒童</option><option value="F">F 兒童</option>
+        </select>
+      </label>
+      <label style="font-size:13px;font-weight:500">老師代號（如 TC、JM）
+        <input class="si" id="cm-teacher" placeholder="TC" style="width:100%;margin-top:4px;text-transform:uppercase">
+      </label>
+      <label style="font-size:13px;font-weight:500">班級容量（預設 6）
+        <input class="si" id="cm-cap" type="number" value="6" min="1" max="20" style="width:100%;margin-top:4px">
+      </label>
+      <div id="cm-modal-err" style="color:var(--rd);font-size:12px;display:none"></div>
+    </div>
+    <div class="mgmt-ft">
+      <button class="btn bs sm" onclick="document.getElementById('cm-modal').classList.remove('open')">取消</button>
+      <button class="btn bp sm" onclick="cmSave()">儲存</button>
+    </div>
+  </div>
+</div>
 <div id="pg-formal" style="display:none">
   <div class="ph">
     <div class="pt">正式生</div>
@@ -1200,6 +1270,7 @@ function G(p){
   if(p==="ncc") RN();
   if(p==="renewal") RVinit();
   if(p==="formal")  formalInit();
+  if(p==="classmgmt") cmInit();
 }
 function SM(n){var el=document.getElementById("m-"+n);if(el)el.classList.add("open");}
 function HM(n){var el=document.getElementById("m-"+n);if(el)el.classList.remove("open");}
@@ -1564,7 +1635,11 @@ function formalGridRender(){
     h+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span></div>';
     sl.students.forEach(function(s){
       if(s.empty){
-        h+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
+        var _h = hall==='北屯'?'B':'X';
+        h+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px;display:flex;align-items:center;justify-content:space-between">';
+        h+='<span>—</span>';
+        h+='<button onclick="seatAdd(\''+_h+'\',\''+sl.day+'\',\''+sl.time+'\',\''+sl.cls+'\',\''+sl.teacher+'\','+s.order+')" style="background:none;border:1px solid #ccc;border-radius:3px;color:#999;font-size:10px;cursor:pointer;padding:0 3px;line-height:16px;flex-shrink:0">+</button>';
+        h+='</div>';
       } else {
         var isM=q&&s.name&&s.name.toLowerCase().indexOf(q)>=0;
         if(isM&&!firstMatch) firstMatch='gm0';
@@ -1657,6 +1732,171 @@ function toggleSidebar(){
     document.querySelector(".app").style.setProperty("--sb-w", sb.classList.contains("collapsed")?"52px":"220px");
   }
 }
+// ── 班級管理 ──────────────────────────────────────────────────────────────
+function cmGetSlots(){
+  var hall = (document.getElementById('cm-hall')||{}).value||'X';
+  return hall==='X' ? SLOTS_X : SLOTS_B;
+}
+function cmSetSlots(slots){
+  var hall = (document.getElementById('cm-hall')||{}).value||'X';
+  if(hall==='X') SLOTS_X = slots; else SLOTS_B = slots;
+  cmSaveLocal();
+}
+function cmSaveLocal(){
+  try{
+    localStorage.setItem('crm_slots_x', JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b', JSON.stringify(SLOTS_B));
+  }catch(e){}
+}
+function cmInit(){
+  // Load from localStorage if available
+  try{
+    var sx = localStorage.getItem('crm_slots_x');
+    var sb = localStorage.getItem('crm_slots_b');
+    if(sx) SLOTS_X = JSON.parse(sx);
+    if(sb) SLOTS_B = JSON.parse(sb);
+  }catch(e){}
+  cmRender();
+}
+function cmRender(){
+  var slots = cmGetSlots();
+  var hall = (document.getElementById('cm-hall')||{}).value||'X';
+  var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
+  var CC = {A:'t-tl',B:'t-tl',C:'t-bl',D:'t-bl',E:'t-am',F:'t-am'};
+  var sorted = slots.slice().sort(function(a,b){
+    var dd=(DO[a.day]||0)-(DO[b.day]||0); if(dd) return dd;
+    return (a.time||'').localeCompare(b.time||'');
+  });
+  var cnt = document.getElementById('classmgmt-count');
+  if(cnt) cnt.textContent = '共 '+slots.length+' 個班次（'+(hall==='X'?'西屯':'北屯')+'館）';
+  var html = '';
+  sorted.forEach(function(sl, i){
+    var filled = sl.students.filter(function(s){return !s.empty;}).length;
+    var realIdx = slots.indexOf(sl);
+    html += '<tr>';
+    html += '<td style="text-align:center">週'+sl.day+'</td>';
+    html += '<td style="text-align:center;font-weight:600">'+sl.time+'</td>';
+    html += '<td style="text-align:center"><span class="tag '+( CC[sl.cls]||'t-gy' )+'" style="font-size:11px">'+sl.cls+'班</span></td>';
+    html += '<td style="text-align:center">'+sl.teacher+'</td>';
+    html += '<td style="text-align:center">'+filled+'/'+sl.students.length+'</td>';
+    html += '<td style="text-align:center">';
+    html += '<button class="btn bs sm" style="font-size:11px;padding:2px 6px;margin-right:4px" onclick="cmOpenEdit('+realIdx+')">編輯</button>';
+    html += '<button class="btn bs sm" style="font-size:11px;padding:2px 6px;color:var(--rd)" onclick="cmDelete('+realIdx+')">刪除</button>';
+    html += '</td></tr>';
+  });
+  var tbody = document.getElementById('cm-tbody');
+  if(tbody) tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx3)">無班次資料</td></tr>';
+}
+function cmOpenAdd(){
+  document.getElementById('cm-edit-idx').value = '';
+  document.getElementById('cm-modal-title').textContent = '新增班次';
+  document.getElementById('cm-day').value = '二';
+  document.getElementById('cm-time').value = '';
+  document.getElementById('cm-cls').value = 'A';
+  document.getElementById('cm-teacher').value = '';
+  document.getElementById('cm-cap').value = '6';
+  document.getElementById('cm-modal-err').style.display = 'none';
+  document.getElementById('cm-modal').classList.add('open');
+}
+function cmOpenEdit(idx){
+  var slots = cmGetSlots();
+  var sl = slots[idx];
+  if(!sl) return;
+  document.getElementById('cm-edit-idx').value = idx;
+  document.getElementById('cm-modal-title').textContent = '編輯班次';
+  document.getElementById('cm-day').value = sl.day;
+  document.getElementById('cm-time').value = sl.time;
+  document.getElementById('cm-cls').value = sl.cls;
+  document.getElementById('cm-teacher').value = sl.teacher;
+  document.getElementById('cm-cap').value = sl.students.length;
+  document.getElementById('cm-modal-err').style.display = 'none';
+  document.getElementById('cm-modal').classList.add('open');
+}
+function cmSave(){
+  var day     = document.getElementById('cm-day').value;
+  var time    = document.getElementById('cm-time').value.trim();
+  var cls     = document.getElementById('cm-cls').value;
+  var teacher = document.getElementById('cm-teacher').value.trim().toUpperCase();
+  var cap     = parseInt(document.getElementById('cm-cap').value)||6;
+  var errEl   = document.getElementById('cm-modal-err');
+
+  if(!time || !/^\d{2}:\d{2}$/.test(time)){ errEl.textContent='請填入正確時段格式（如 09:30）'; errEl.style.display=''; return; }
+  if(!teacher){ errEl.textContent='請填入老師代號'; errEl.style.display=''; return; }
+
+  var slots = cmGetSlots();
+  var editIdx = document.getElementById('cm-edit-idx').value;
+
+  if(editIdx !== ''){
+    // Edit existing
+    var sl = slots[parseInt(editIdx)];
+    var oldCap = sl.students.length;
+    sl.day=day; sl.time=time; sl.cls=cls; sl.teacher=teacher;
+    // Adjust capacity
+    if(cap > oldCap){
+      for(var i=oldCap+1;i<=cap;i++) sl.students.push({order:i,name:'',special:false,upgrade:'',empty:true});
+    } else if(cap < oldCap){
+      sl.students = sl.students.slice(0, cap);
+    }
+  } else {
+    // New slot
+    var students = [];
+    for(var i=1;i<=cap;i++) students.push({order:i,name:'',special:false,upgrade:'',empty:true});
+    slots.push({day:day,time:time,cls:cls,teacher:teacher,students:students});
+  }
+  cmSetSlots(slots);
+  document.getElementById('cm-modal').classList.remove('open');
+  cmRender();
+  if(typeof formalGridRender==='function') formalGridRender();
+}
+function cmDelete(idx){
+  var slots = cmGetSlots();
+  var sl = slots[idx];
+  if(!confirm('確定刪除 週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+'？')) return;
+  slots.splice(idx,1);
+  cmSetSlots(slots);
+  cmRender();
+  if(typeof formalGridRender==='function') formalGridRender();
+}
+
+// ── 劃位：在空格點 + 新增學員 ─────────────────────────────────────────────
+function seatAdd(hall, slotDay, slotTime, slotCls, slotTeacher, seatOrder){
+  // Find matching slot
+  var slots = hall==='X' ? SLOTS_X : SLOTS_B;
+  var sl = null;
+  slots.forEach(function(s){
+    if(s.day===slotDay&&s.time===slotTime&&s.cls===slotCls&&s.teacher===slotTeacher) sl=s;
+  });
+  if(!sl) return;
+
+  var name = prompt('輸入學員姓名：');
+  if(!name||!name.trim()) return;
+  name = name.trim();
+
+  // Fill the empty seat at seatOrder
+  var seat = sl.students.find(function(s){return s.order===seatOrder&&s.empty;});
+  if(!seat){ alert('此位置已有學員'); return; }
+  seat.name = name; seat.empty = false; seat.special = false; seat.upgrade = '';
+
+  // Also add to SEAT data
+  var seatArr = hall==='X' ? SEAT_X : SEAT_B;
+  seatArr.push({
+    order:String(seatOrder), teacher:slotTeacher, day:slotDay, time:slotTime,
+    cls:slotCls, parent:'', name:name, dob:'', total_s:'', seasons:'',
+    phone:'', special:false, upgrade:'', hall:(hall==='X'?'西屯':'北屯')
+  });
+
+  // Save to localStorage
+  try{
+    localStorage.setItem('crm_slots_x', JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b', JSON.stringify(SLOTS_B));
+    localStorage.setItem('crm_seat_x', JSON.stringify(SEAT_X));
+    localStorage.setItem('crm_seat_b', JSON.stringify(SEAT_B));
+  }catch(e){}
+
+  // Re-render grid
+  if(typeof formalGridRender==='function') formalGridRender();
+}
+
 </script>
 </body>
 </html>
