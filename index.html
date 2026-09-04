@@ -1516,7 +1516,7 @@ function formalGridRender(){
   var BG = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var FG = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
   var TBG = '#EEF2FF';
-  var TW=52, CW=72, RH=148, HH=22;
+  var TW=44, CW=60, RH=148, HH=22;
 
   var q             = (document.getElementById('q-formal').value||'').trim().toLowerCase();
   var filterCls     = (document.getElementById('f-formal-cls').value||'');
@@ -1580,7 +1580,7 @@ function formalGridRender(){
   // Build WD table (weeks 二-五, WD times only)
   function buildWDTable(){
     var nc = wdDays.length * SUBCOLS;
-    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;display:inline-table;vertical-align:top">';
+    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;display:table;width:'+(TW+wdDays.length*SUBCOLS*CW)+'px">';
     t += '<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
     for(var i=0;i<nc;i++) t += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
@@ -1610,7 +1610,7 @@ function formalGridRender(){
   function buildSATable(){
     if(!hasSat||!saTimes.length) return '';
     var nc = SUBCOLS;
-    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;display:inline-table;vertical-align:top;margin-left:6px">';
+    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;display:table;width:'+(TW+nc*CW)+'px">';
     t += '<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
     for(var i=0;i<nc;i++) t += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
@@ -1635,7 +1635,10 @@ function formalGridRender(){
   var wdHTML = wdTimes.length ? buildWDTable() : '';
   var saHTML = buildSATable();
 
-  gv.innerHTML = '<div style="overflow:auto;max-height:calc(100vh - 230px);white-space:nowrap">'+wdHTML+saHTML+'</div>';
+  gv.innerHTML = '<div style="overflow:auto;max-height:calc(100vh - 230px)"><div style="display:flex;gap:6px;align-items:flex-start">'+
+    (wdHTML?'<div style="flex:none">'+wdHTML+'</div>':'')+
+    (saHTML?'<div style="flex:none">'+saHTML+'</div>':'')+
+    '</div></div>';
 
   if(q && firstMatch){
     setTimeout(function(){
