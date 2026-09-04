@@ -457,6 +457,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     <div style="margin-left:auto;display:flex;gap:4px">
       <button class="formal-vtab active" data-view="list" onclick="formalSwitchView('list')">名單</button>
       <button class="formal-vtab" data-view="grid" onclick="formalSwitchView('grid')">劃位表</button>
+      <button class="formal-vtab" data-view="vacancy" onclick="formalSwitchView('vacancy')">空額一覽</button>
     </div>
   </div>
 
@@ -669,8 +670,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div class="mo" id="m-add-pkg"><div class="md"><div class="mt2">新增/續購套票</div><div class="fr"><label class="flb">學員搜尋</label><input class="fi2" placeholder="輸入姓名或電話..."></div><div class="fgrid"><div class="fr"><label class="flb">套票類型</label><select class="fse"><option>套票A（3堂）</option><option>套票B（5堂）</option></select></div><div class="fr"><label class="flb">購買日期</label><input class="fi2" type="date"></div></div><div class="mf"><button class="btn bs sm" onclick="HM('add-pkg')">取消</button><button class="btn bp sm" onclick="HM('add-pkg')">建立套票</button></div></div></div>
 <div class="mo" id="m-edit-ncc"><div class="md" style="width:560px;max-width:95vw"><div class="mt2" id="en-title">NCC 編輯</div><div id="en-body"></div><div class="mf"><button class="btn bs sm" onclick="HM('edit-ncc')">取消</button><button class="btn bp sm" onclick="SN()">儲存</button></div></div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
-<script>
+<scrip
 // ── Config ───────────────────────────────
 // ── Config ───────────────────────────────────────────────────────────────
 var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
@@ -1451,19 +1451,148 @@ function formalSetHall(btn, hall){
   }
 }
 
+function formalVacancyRender(){
+  var hall = _formalHall||'';
+  var vv = document.getElementById('formal-vacancy-body');
+  if(!vv) return;
+
+  var BG  = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
+  var FG  = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
+  var DO  = {'二':0,'三':1,'四':2,'五':3,'六':4};
+  var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
+
+  // Collect slots for selected hall(s)
+  var slotsX = (hall===''||hall==='西屯') ? SLOTS_X : [];
+  var slotsB = (hall===''||hall==='北屯') ? SLOTS_B : [];
+
+  function buildVacancyTable(slots, hallName){
+    // Only slots with at least 1 empty seat
+    var vacant = slots.filter(function(sl){ return sl.students.some(function(s){return s.empty;}); });
+    if(!vacant.length) return '<div style="padding:16px;color:var(--tx3);font-size:13px">'+hallName+'：目前所有班級已額滿</div>';
+
+    // Group by day
+    var byDay = {};
+    var DO2 = {'二':0,'三':1,'四':2,'五':3,'六':4};
+    vacant.forEach(function(sl){
+      if(!byDay[sl.day]) byDay[sl.day]=[];
+      byDay[sl.day].push(sl);
+    });
+    var days = Object.keys(byDay).sort(function(a,b){return (DO2[a]||0)-(DO2[b]||0);});
+
+    // Get all unique times
+    var timeSet={};
+    vacant.forEach(function(sl){ timeSet[sl.time]=true; });
+    var times = Object.keys(timeSet).sort();
+
+    var TW=52, CW=80, TBG='#EEF2FF';
+    // Max slots per day per time = max concurrent
+    var maxPerDay={};
+    days.forEach(function(d){
+      var max=0;
+      times.forEach(function(t){
+        var n=byDay[d].filter(function(sl){return sl.time===t;}).length;
+        if(n>max) max=n;
+      });
+      maxPerDay[d]=Math.max(1,max);
+    });
+
+    var totalCols = days.reduce(function(s,d){return s+maxPerDay[d];},0);
+    var tableW = TW + totalCols*CW;
+
+    var t = '<div style="margin-bottom:8px;font-size:13px;font-weight:600;color:var(--tx2)">'+hallName+'</div>';
+    t += '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;width:'+tableW+'px;min-width:'+tableW+'px;margin-bottom:20px">';
+    t += '<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
+    for(var i=0;i<totalCols;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
+    t += '</colgroup><thead><tr>';
+    t += '<th rowspan="2" style="border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
+    days.forEach(function(d){
+      t += '<th colspan="'+maxPerDay[d]+'" style="width:'+(maxPerDay[d]*CW)+'px;max-width:'+(maxPerDay[d]*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'<span style="font-size:10px;font-weight:400;color:#888;margin-left:4px">('+DAY[d]+')</span></th>';
+    });
+    t += '</tr><tr>';
+    for(var i=0;i<totalCols;i++) t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+    t += '</tr></thead><tbody>';
+
+    var prevGrp=-1;
+    times.forEach(function(time){
+      var tFmt = time.slice(0,2)+':'+time.slice(2);
+      if(time.indexOf(':')>=0) tFmt=time; // already formatted
+      var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
+      if(prevGrp>=0&&grp!==prevGrp) t+='<tr><td colspan="'+(1+totalCols)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
+      prevGrp=grp;
+
+      t+='<tr><td style="border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;padding:2px;vertical-align:middle">'+tFmt+'</td>';
+      days.forEach(function(d){
+        var daySlots=byDay[d]?byDay[d].filter(function(sl){return sl.time===time;}).sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);}):[];
+        for(var si=0;si<maxPerDay[d];si++){
+          var sl=daySlots[si]||null;
+          if(!sl){
+            t+='<td style="width:'+CW+'px;border:1px solid #e8e8e8;background:#fafafa"></td>';
+          } else {
+            var empty=sl.students.filter(function(s){return s.empty;}).length;
+            var total=sl.students.length;
+            var bg=BG[sl.cls]||'#eee', fg=FG[sl.cls]||'#333';
+            t+='<td style="width:'+CW+'px;border:1px solid #ccc;text-align:center;vertical-align:middle;padding:4px 2px">';
+            t+='<div style="display:flex;flex-direction:column;align-items:center;gap:3px">';
+            t+='<span style="display:inline-flex;align-items:center;gap:3px">';
+            t+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+sl.cls+'</span>';
+            t+='<span style="font-size:11px;color:#555;font-weight:600">'+sl.teacher+'</span>';
+            t+='</span>';
+            // Vacancy count - highlight if > 0
+            t+='<span style="font-size:18px;font-weight:800;color:'+(empty>0?fg:'#ccc')+';line-height:1">'+empty+'</span>';
+            t+='<span style="font-size:9px;color:#999">剩 / '+total+'</span>';
+            t+='</div></td>';
+          }
+        }
+      });
+      t+='</tr>';
+    });
+
+    // Summary row by class type
+    t+='<tr><td colspan="'+(1+totalCols)+'" style="height:4px;background:#ccc;border:none;padding:0"></td></tr>';
+    t+='<tr><td style="border:1px solid #ccc;background:#f5f5f5;font-size:11px;color:#666;text-align:center;padding:4px;font-weight:600">剩餘<br>名額<br>統計</td>';
+    var clsTypes = ['N','A','B','C','D','E','F'];
+    // Build per-day totals
+    days.forEach(function(d){
+      var daySlots=byDay[d]||[];
+      // Group by cls
+      var byCls={};
+      daySlots.forEach(function(sl){
+        var e=sl.students.filter(function(s){return s.empty;}).length;
+        if(!byCls[sl.cls]) byCls[sl.cls]=0;
+        byCls[sl.cls]+=e;
+      });
+      var nc=maxPerDay[d];
+      var lines=['<div style="font-size:11px;padding:4px 2px;text-align:left">'];
+      clsTypes.forEach(function(cls){
+        if(byCls[cls]>0) lines.push('<span style="display:flex;align-items:center;gap:4px;margin:1px 0"><span style="width:14px;height:14px;border-radius:50%;background:'+FG[cls]+';color:#fff;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+cls+'</span><strong>'+byCls[cls]+'</strong>席</span>');
+      });
+      lines.push('</div>');
+      t+='<td colspan="'+nc+'" style="border:1px solid #ccc;background:#f5f5f5;vertical-align:top">'+lines.join('')+'</td>';
+    });
+    t+='</tr></tbody></table>';
+    return t;
+  }
+
+  var html='<div style="overflow:auto;max-height:calc(100vh - 230px);padding:4px">';
+  if(hall===''||hall==='西屯') html+=buildVacancyTable(SLOTS_X,'西屯館');
+  if(hall===''||hall==='北屯') html+=buildVacancyTable(SLOTS_B,'北屯館');
+  html+='</div>';
+  vv.innerHTML=html;
+}
+
 function formalSwitchView(view){
   var lv = document.getElementById('formal-list-view');
   var gv = document.getElementById('formal-grid-view');
+  var vv = document.getElementById('formal-vacancy-view');
   if(lv) lv.style.display = view==='list' ? '' : 'none';
   if(gv) gv.style.display = view==='grid' ? '' : 'none';
+  if(vv) vv.style.display = view==='vacancy' ? '' : 'none';
   document.querySelectorAll('.formal-vtab').forEach(function(t){
     t.classList.toggle('active', t.dataset.view===view);
   });
-  if(view==='grid'){
-    formalGridRender();
-  } else {
-    formalRender();
-  }
+  if(view==='grid') formalGridRender();
+  else if(view==='vacancy') formalVacancyRender();
+  else formalRender();
 }
 
 function formalInit(){
@@ -1797,17 +1926,21 @@ function cmRender(){
     var filled=sl.students.filter(function(s){return !s.empty;}).length;
     var cap=sl.students.length;
     var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0;cursor:pointer" onclick="cmOpenEdit('+idx+')">';
-    h+='<div style="background:'+bg+';padding:3px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ccc">';
-    h+='<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:'+fg+';color:#fff;font-size:9px;font-weight:700">'+sl.cls+'</span>';
-    h+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span>';
-    h+='<span style="font-size:10px;color:'+(filled<cap?'var(--am)':'#999')+'">'+filled+'/'+cap+'</span>';
-    h+='</div>';
-    // Show first 3 students
-    var shown=sl.students.filter(function(s){return !s.empty;}).slice(0,3);
-    shown.forEach(function(s){
-      h+='<div style="font-size:10px;padding:1px 5px;border-bottom:1px solid #f0f0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+'</div>';
+    // Compact cell: just class badge, teacher, fill rate bar
+    var emptyCount=cap-filled;
+    h+='<div style="background:'+bg+';padding:4px 6px;display:flex;flex-direction:column;align-items:center;gap:3px">';
+    h+='<span style="display:flex;align-items:center;gap:4px">';
+    h+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+sl.cls+'</span>';
+    h+='<span style="font-size:11px;color:#444;font-weight:600">'+sl.teacher+'</span>';
+    h+='</span>';
+    // Seat dots
+    h+='<div style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center">';
+    sl.students.forEach(function(s){
+      h+='<span style="width:10px;height:10px;border-radius:50%;background:'+(s.empty?'#e0e0e0':fg)+';display:inline-block"></span>';
     });
-    if(filled>3) h+='<div style="font-size:10px;padding:1px 5px;color:#999">...還有'+(filled-3)+'人</div>';
+    h+='</div>';
+    h+='<span style="font-size:10px;color:'+(emptyCount>0?fg:'#999')+'">餘 '+emptyCount+' 席</span>';
+    h+='</div>';
     h+='</td>';
     return h;
   }
@@ -2024,6 +2157,13 @@ function seatMove(hall, day, time, cls, teacher, order, name){
     localStorage.setItem('crm_slots_b',JSON.stringify(SLOTS_B));
     localStorage.setItem('crm_seat_x',JSON.stringify(SEAT_X));
     localStorage.setItem('crm_seat_b',JSON.stringify(SEAT_B));
+  }catch(e){}
+  if(typeof formalGridRender==='function') formalGridRender();
+}
+
+
+
+SON.stringify(SEAT_B));
   }catch(e){}
   if(typeof formalGridRender==='function') formalGridRender();
 }
