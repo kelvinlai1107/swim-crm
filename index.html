@@ -244,6 +244,10 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 
 .ctx-item{padding:8px 14px;cursor:pointer;color:var(--tx)}
 .ctx-item:hover{background:var(--sf2)}
+
+.season-item{padding:8px 16px;cursor:pointer;font-size:13px;color:var(--tx)}
+.season-item:hover{background:var(--sf2)}
+.topbar{position:relative}
 </style>
 </head>
 <body>
@@ -345,7 +349,12 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div class="app">
 <div class="topbar">
   <div class="logo">游泳學院 <span>CRM</span></div>
-  <div class="s-pill">2026 S1 春季</div>
+  <div class="s-pill" id="season-pill" style="cursor:pointer;user-select:none" onclick="seasonMenuToggle()" title="切換學期">2026 S2 夏季 ▾</div>
+  <div id="season-menu" style="display:none;position:absolute;top:44px;left:8px;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:200;padding:6px 0;min-width:140px">
+    <div class="season-item" data-season="S1" onclick="seasonSwitch('S1')">2026 S1 春季</div>
+    <div class="season-item" data-season="S2" onclick="seasonSwitch('S2')" style="font-weight:700;color:var(--pr)">2026 S2 夏季 ✓</div>
+    <div class="season-item" data-season="S3" onclick="seasonSwitch('S3')">2026 S3 秋季</div>
+  </div>
   <div style="display:flex;gap:5px;margin-left:8px">
     <span class="tag t-bl" style="cursor:pointer">西屯館</span>
     <span class="tag t-gy" style="cursor:pointer">北屯館</span>
@@ -1136,6 +1145,128 @@ function getUserRole(email){
 var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
 
 // ── Init after page fully loaded ─────────────────────────────────────────
+// ── Season Management ────────────────────────────────────────────────────
+var _curSeason = 'S2';  // default = current HTML data
+var SLB = {S1:'春季',S2:'夏季',S3:'秋季'};
+var _baseSlotX = null;  // backup of original SLOTS_X (S2)
+var _baseSlotB = null;
+var _baseSeatX = null;
+var _baseSeatB = null;
+
+function seasonInit(){
+  // Save original HTML data as S2 base (only once)
+  _baseSlotX = JSON.parse(JSON.stringify(SLOTS_X));
+  _baseSlotB = JSON.parse(JSON.stringify(SLOTS_B));
+  _baseSeatX = JSON.parse(JSON.stringify(SEAT_X));
+  _baseSeatB = JSON.parse(JSON.stringify(SEAT_B));
+
+  // Load saved current season
+  try{
+    var saved = localStorage.getItem('crm_cur_season');
+    if(saved && SLB[saved]) _curSeason = saved;
+  }catch(e){}
+
+  // Load season data
+  _loadSeasonData(_curSeason);
+  _updateSeasonUI();
+}
+
+function _loadSeasonData(s){
+  try{
+    // S2 = HTML base data (or localStorage override)
+    var sx = localStorage.getItem('crm_slots_x_'+s);
+    var sb = localStorage.getItem('crm_slots_b_'+s);
+    var seax = localStorage.getItem('crm_seat_x_'+s);
+    var seab = localStorage.getItem('crm_seat_b_'+s);
+    if(s==='S2' && !sx && _baseSlotX){
+      SLOTS_X = JSON.parse(JSON.stringify(_baseSlotX));
+      SLOTS_B = JSON.parse(JSON.stringify(_baseSlotB));
+      SEAT_X  = JSON.parse(JSON.stringify(_baseSeatX));
+      SEAT_B  = JSON.parse(JSON.stringify(_baseSeatB));
+    } else {
+      SLOTS_X = sx  ? JSON.parse(sx)  : (s==='S2'&&_baseSlotX ? JSON.parse(JSON.stringify(_baseSlotX)) : []);
+      SLOTS_B = sb  ? JSON.parse(sb)  : (s==='S2'&&_baseSlotB ? JSON.parse(JSON.stringify(_baseSlotB)) : []);
+      SEAT_X  = seax? JSON.parse(seax): (s==='S2'&&_baseSeatX ? JSON.parse(JSON.stringify(_baseSeatX)) : []);
+      SEAT_B  = seab? JSON.parse(seab): (s==='S2'&&_baseSeatB ? JSON.parse(JSON.stringify(_baseSeatB)) : []);
+    }
+    // Also load any locally-saved overrides from cmSaveLocal
+    var lsx = localStorage.getItem('crm_slots_x_'+s+'_edit');
+    var lsb = localStorage.getItem('crm_slots_b_'+s+'_edit');
+    if(lsx) SLOTS_X = JSON.parse(lsx);
+    if(lsb) SLOTS_B = JSON.parse(lsb);
+  }catch(e){ console.warn('Season load error:', e); }
+}
+
+function _saveCurrentSeason(){
+  try{
+    localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+    localStorage.setItem('crm_seat_x_'+_curSeason,  JSON.stringify(SEAT_X));
+    localStorage.setItem('crm_seat_b_'+_curSeason,  JSON.stringify(SEAT_B));
+  }catch(e){}
+}
+
+function _updateSeasonUI(){
+  var pill = document.getElementById('season-pill');
+  if(pill) pill.textContent = '2026 '+_curSeason+' '+SLB[_curSeason]+' ▾';
+  // Update menu checkmarks
+  document.querySelectorAll('.season-item').forEach(function(el){
+    var s = el.dataset.season;
+    el.style.fontWeight = (s===_curSeason)?'700':'400';
+    el.style.color = (s===_curSeason)?'var(--pr)':'var(--tx)';
+    el.textContent = '2026 '+s+' '+SLB[s]+(s===_curSeason?' ✓':'');
+  });
+  document.getElementById('nb-formal') && formalInit && typeof formalInit==='function' && setTimeout(function(){
+    if(typeof formalInit==='function') formalInit();
+  },50);
+}
+
+function seasonMenuToggle(){
+  var m = document.getElementById('season-menu');
+  if(m) m.style.display = (m.style.display==='none')?'':'none';
+}
+
+function seasonSwitch(s){
+  if(s===_curSeason){ seasonMenuToggle(); return; }
+  // Save current season data
+  _saveCurrentSeason();
+  // Switch
+  _curSeason = s;
+  try{ localStorage.setItem('crm_cur_season', s); }catch(e){}
+  _loadSeasonData(s);
+  _updateSeasonUI();
+  seasonMenuToggle();
+  // Re-render current page
+  var pg = document.querySelector('.pg[style*="display: block"], .pg:not([style*="none"])');
+  if(typeof formalInit==='function') formalInit();
+  if(typeof cmInit==='function' && document.getElementById('pg-classmgmt') &&
+     document.getElementById('pg-classmgmt').style.display!=='none') cmInit();
+}
+
+// Close season menu when clicking outside
+document.addEventListener('click', function(e){
+  var menu = document.getElementById('season-menu');
+  var pill = document.getElementById('season-pill');
+  if(menu && !menu.contains(e.target) && e.target!==pill){
+    menu.style.display='none';
+  }
+});
+
+// Override cmSaveLocal to also save per-season keys
+function cmSaveLocal(){
+  try{
+    localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+    localStorage.setItem('crm_seat_x_'+_curSeason,  JSON.stringify(SEAT_X));
+    localStorage.setItem('crm_seat_b_'+_curSeason,  JSON.stringify(SEAT_B));
+    // Also write legacy keys for backward compat
+    localStorage.setItem('crm_slots_x', JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b', JSON.stringify(SLOTS_B));
+    localStorage.setItem('crm_seat_x',  JSON.stringify(SEAT_X));
+    localStorage.setItem('crm_seat_b',  JSON.stringify(SEAT_B));
+  }catch(e){}
+}
+
 window.addEventListener("load", function(){
   _msalApp = new msal.PublicClientApplication({
     auth:{
