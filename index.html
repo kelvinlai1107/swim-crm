@@ -408,7 +408,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   </div>
 
   <!-- 劃位表視圖 -->
-  <div id="formal-grid-view" style="display:none;overflow:auto;max-height:calc(100vh - 220px)">
+  <div id="formal-grid-view" style="display:none">
     <div id="formal-grid-body"></div>
   </div>
 </div>
@@ -609,6 +609,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <script>
+// ── Config ───────────────────────────────
 // ── Config ───────────────────────────────────────────────────────────────
 var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
 var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
@@ -1579,7 +1580,7 @@ function formalGridRender(){
   // WD table: always SUBCOLS per day, fixed width
   var wdColCount = wdDays.length * SUBCOLS;
 
-  function buildTable(days, times, subCols){
+  function buildTable(days, times, subCols, noSticky){
     if(!times.length) return '';
     var nc = days.length * subCols;
     var tableW = TW + nc * CW;
@@ -1588,8 +1589,8 @@ function formalGridRender(){
     for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t+='</colgroup>';
     // Header row 1
-    t+='<thead style="position:sticky;top:0;z-index:10"><tr>';
-    t+='<th rowspan="2" style="position:sticky;left:0;z-index:20;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">時段</th>';
+    t+='<thead style="'+(noSticky?'':'position:sticky;top:0;z-index:10')+'"><tr>';
+    t+='<th rowspan="2" style="'+(noSticky?'':'position:sticky;left:0;z-index:20;')+' border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">時段</th>';
     days.forEach(function(d){
       t+='<th colspan="'+subCols+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
     });
@@ -1601,7 +1602,7 @@ function formalGridRender(){
       var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
       if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
       pg=grp;
-      t+='<tr><td style="position:sticky;left:0;z-index:5;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">'+time+'</td>';
+      t+='<tr><td style="'+(noSticky?'':'position:sticky;left:0;z-index:5;')+';border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">'+time+'</td>';
       days.forEach(function(d){
         var ds=getSlots(d,time);
         for(var si=0;si<subCols;si++) t+=cellHTML(ds[si]||null,RH);
@@ -1646,6 +1647,3 @@ function toggleSidebar(){
     document.querySelector(".app").style.setProperty("--sb-w", sb.classList.contains("collapsed")?"52px":"220px");
   }
 }
-</script>
-</body>
-</html>
