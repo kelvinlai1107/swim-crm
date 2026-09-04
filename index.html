@@ -1580,7 +1580,7 @@ function formalGridRender(){
   // Build WD table (weeks 二-五, WD times only)
   function buildWDTable(){
     var nc = wdDays.length * SUBCOLS;
-    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;display:table;width:'+(TW+wdDays.length*SUBCOLS*CW)+'px">';
+    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;width:'+(TW+wdDays.length*SUBCOLS*CW)+'px;min-width:'+(TW+wdDays.length*SUBCOLS*CW)+'px">';
     t += '<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
     for(var i=0;i<nc;i++) t += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
@@ -1610,7 +1610,7 @@ function formalGridRender(){
   function buildSATable(){
     if(!hasSat||!saTimes.length) return '';
     var nc = SUBCOLS;
-    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;display:table;width:'+(TW+nc*CW)+'px">';
+    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;width:'+(TW+nc*CW)+'px;min-width:'+(TW+nc*CW)+'px">';
     t += '<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
     for(var i=0;i<nc;i++) t += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
@@ -1637,9 +1637,9 @@ function formalGridRender(){
 
     var wdW = TW + wdDays.length * SUBCOLS * CW;
   var saW = TW + SUBCOLS * CW;
-  gv.innerHTML = '<div style="overflow:auto;max-height:calc(100vh - 230px)"><div style="display:flex;gap:6px;align-items:flex-start">'+
-    (wdHTML?'<div style="flex:none;width:'+wdW+'px;overflow:hidden">'+wdHTML+'</div>':'')+
-    (saHTML?'<div style="flex:none;width:'+saW+'px;overflow:hidden">'+saHTML+'</div>':'')+
+  gv.innerHTML = '<div style="overflow:auto;max-height:calc(100vh - 230px)"><div style="display:flex;gap:6px;align-items:flex-start;width:fit-content">'+
+    (wdHTML?'<div style="flex:0 0 '+wdW+'px;width:'+wdW+'px">'+wdHTML+'</div>':'')+
+    (saHTML?'<div style="flex:0 0 '+saW+'px;width:'+saW+'px">'+saHTML+'</div>':'')+
     '</div></div>';
 
   if(q && firstMatch){
