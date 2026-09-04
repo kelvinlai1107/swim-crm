@@ -1625,12 +1625,14 @@ function formalGridRender(){
     saTable = buildTable(['六'], saTimes, SUBCOLS);
   }
 
-  var sep = (wdTable && saTable) ? '<div style="width:6px;flex-shrink:0;align-self:flex-start"></div>' : '';
-  var htmlOut='<div style="display:flex;gap:6px;overflow:auto;max-height:calc(100vh - 230px)">';
-  if(wdTable) htmlOut+='<div style="flex:none">'+wdTable+'</div>';
-  if(saTable) htmlOut+='<div style="flex:none">'+saTable+'</div>';
-  htmlOut+='</div>';
-  gv.innerHTML=htmlOut;
+  // Give each table its own fixed-width scroll container
+  var wdW = TW + wdDays.length * SUBCOLS * CW;
+  var saW = TW + SUBCOLS * CW;
+  var htmlOut = '<div style="display:flex;gap:6px;overflow-x:auto">';
+  if(wdTable) htmlOut += '<div style="width:'+wdW+'px;min-width:'+wdW+'px;max-width:'+wdW+'px;overflow:auto;max-height:calc(100vh - 230px)">'+wdTable+'</div>';
+  if(saTable) htmlOut += '<div style="width:'+saW+'px;min-width:'+saW+'px;max-width:'+saW+'px;overflow:auto;max-height:calc(100vh - 230px)">'+saTable+'</div>';
+  htmlOut += '</div>';
+  gv.innerHTML = htmlOut;
 
   if(q && firstMatchId){
     setTimeout(function(){
