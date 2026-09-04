@@ -1586,7 +1586,7 @@ function formalGridRender(){
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     t += '<th rowspan="2" style="position:sticky;left:0;z-index:20;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
     wdDays.forEach(function(d){
-      t += '<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
+      t += '<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;max-width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
     });
     t += '</tr><tr>';
     for(var i=0;i<nc;i++) t += '<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
@@ -1615,7 +1615,7 @@ function formalGridRender(){
     for(var i=0;i<nc;i++) t += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     t += '<th rowspan="2" style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    t += '<th colspan="'+nc+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
+    t += '<th colspan="'+nc+'" style="width:'+(nc*CW)+'px;max-width:'+(nc*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
     t += '</tr><tr>';
     for(var i=0;i<nc;i++) t += '<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
     t += '</tr></thead><tbody>';
