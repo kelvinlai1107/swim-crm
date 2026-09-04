@@ -1625,7 +1625,11 @@ function formalGridRender(){
   }
 
   var sep = (wdTable && saTable) ? '<div style="width:6px;flex-shrink:0;align-self:flex-start"></div>' : '';
-  gv.innerHTML='<div style="display:flex;align-items:flex-start;overflow:auto;max-height:calc(100vh - 230px)"><div style="flex-shrink:0">'+wdTable+'</div>'+sep+'<div style="flex-shrink:0">'+saTable+'</div></div>';
+  var htmlOut='<div style="display:flex;gap:6px;overflow:auto;max-height:calc(100vh - 230px)">';
+  if(wdTable) htmlOut+='<div style="flex:none">'+wdTable+'</div>';
+  if(saTable) htmlOut+='<div style="flex:none">'+saTable+'</div>';
+  htmlOut+='</div>';
+  gv.innerHTML=htmlOut;
 
   if(q && firstMatchId){
     setTimeout(function(){
@@ -1636,7 +1640,7 @@ function formalGridRender(){
 }
 
 function toggleSidebar(){
-  var sb = document.querySelector(".sb");
+  var sb = document.querySelector(".sidebar");
   if(sb){
     sb.classList.toggle("collapsed");
     document.querySelector(".app").style.setProperty("--sb-w", sb.classList.contains("collapsed")?"52px":"220px");
