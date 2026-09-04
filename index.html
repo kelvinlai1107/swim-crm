@@ -1467,8 +1467,8 @@ function formalVacancyRender(){
     return;
   }
 
-  var BG = {A:'#FFEBEB',B:'#FFEBEB',N:'#FFEBEB',C:'#E0F4F4',D:'#E0F4F4',E:'#E8F5E9',F:'#E8F5E9'};
-  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#00796B',D:'#00796B',E:'#2E7D32',F:'#2E7D32'};
+  var BG = {A:'#FFEBEB',B:'#FFEBEB',N:'#FFEBEB',C:'#FFFAE8',D:'#FFFAE8',E:'#E8F5E9',F:'#E8F5E9'};
+  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#8D6E00',D:'#8D6E00',E:'#2E7D32',F:'#2E7D32'};
   var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
 
   var filterCls     = (document.getElementById('f-formal-cls')||{}).value||'';
@@ -1598,70 +1598,53 @@ function formalVacancyRender(){
     return {byCls:byCls, junior:jEmpty, senior:sEmpty};
   }
 
-  function renderSummaryTable(TW,CW,allDays,wdSubMap,hasSat,saSub){
+  function renderSummaryTable(TW, CW, days, subMap){
+    // Renders summary for a specific set of days (either WD or SA)
     var ORDER = ['N','A','C','E','_JR','B','D','F','_SR'];
-    var JUNIOR = ['N','A','C','E'];
-    var SENIOR = ['B','D','F'];
-    var allClasses=['N','A','B','C','D','E','F'];
-
+    var JUNIOR=['N','A','C','E'], SENIOR=['B','D','F'];
     var allDaySums={};
-    allDays.forEach(function(d){ allDaySums[d]=daySummary(d); });
+    days.forEach(function(d){ allDaySums[d]=daySummary(d); });
     var totalByCls={}, totalJ=0, totalS=0;
-    allDays.forEach(function(d){
-      var ds=allDaySums[d];
-      Object.keys(ds.byCls).forEach(function(cls){
-        if(!totalByCls[cls]) totalByCls[cls]=0;
-        totalByCls[cls]+=ds.byCls[cls];
-      });
-      totalJ+=ds.junior; totalS+=ds.senior;
+    days.forEach(function(d){
+      Object.keys(allDaySums[d].byCls).forEach(function(c){ if(!totalByCls[c]) totalByCls[c]=0; totalByCls[c]+=allDaySums[d].byCls[c]; });
+      totalJ+=allDaySums[d].junior; totalS+=allDaySums[d].senior;
     });
-
     function vc(n){ return n>0?(n<=3?'#E67E22':'#C0392B'):'#bbb'; }
     function cellV(n,sc){
-      sc=sc||1;
-      return '<td colspan="'+sc+'" style="border:1px solid #e0e0e0;text-align:right;padding:2px 6px;font-size:12px;font-weight:'+(n>0?'700':'400')+';color:'+vc(n)+'">'+n+'</td>';
+      return '<td colspan="'+(sc||1)+'" style="border:1px solid #e0e0e0;text-align:right;padding:2px 5px;font-size:12px;font-weight:'+(n>0?'700':'400')+';color:'+vc(n)+'">'+n+'</td>';
     }
-
-    var summaryColgroup='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
-    allDays.forEach(function(d){ var sc=wdSubMap[d]||1; for(var i=0;i<sc;i++) summaryColgroup+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">'; });
-    summaryColgroup+='<col style="width:60px"></colgroup>';
-
-    var dayHeaders='<th style="border:1px solid #ccc;background:#f5f5f5;font-size:11px;padding:2px 6px;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">班別</th>';
-    allDays.forEach(function(d){
-      var sc=wdSubMap[d]||1, colW=sc*CW;
-      dayHeaders+='<th colspan="'+sc+'" style="width:'+colW+'px;min-width:'+colW+'px;max-width:'+colW+'px;border:1px solid #ccc;background:#e8edf8;font-size:11px;font-weight:700;text-align:center;padding:2px 4px">週'+d+'<br><span style="font-size:9px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
+    // colgroup matching the section's columns
+    var cg='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
+    days.forEach(function(d){ var sc=subMap[d]||1; for(var i=0;i<sc;i++) cg+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">'; });
+    cg+='</colgroup>';
+    // header row
+    var hdr='<thead><tr><th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;padding:2px 5px;width:'+TW+'px">班別</th>';
+    days.forEach(function(d){
+      var sc=subMap[d]||1;
+      hdr+='<th colspan="'+sc+'" style="width:'+(sc*CW)+'px;min-width:'+(sc*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:10px;font-weight:700;text-align:center;padding:2px">'+d+'<span style="font-size:9px;font-weight:400;color:#888;margin-left:2px">('+DAY[d]+')</span></th>';
     });
-    dayHeaders+='<th style="border:1px solid #ccc;background:#FFF9C4;font-size:11px;font-weight:700;text-align:center;padding:2px 4px;color:#B8860B">TOTAL</th>';
-
+    hdr+='</tr></thead>';
+    // rows
     var rows='';
     ORDER.forEach(function(item){
       if(item==='_JR'){
         if(filterCls && JUNIOR.indexOf(filterCls)<0) return;
-        rows+='<tr style="background:#FFF8E1"><td style="border:1px solid #ccc;padding:2px 6px;font-size:11px;font-weight:700;color:#E65100;text-align:center;line-height:1.2">初階<br>總計</td>';
-        allDays.forEach(function(d){ var n=allDaySums[d].junior; var sc=wdSubMap[d]||1; rows+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 6px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
-        rows+='<td style="border:1px solid #ccc;text-align:right;padding:2px 6px;font-size:12px;font-weight:700;color:'+(totalJ>0?'#C0392B':'#bbb')+'">'+totalJ+'</td></tr>';
-        return;
+        rows+='<tr style="background:#FFF8E1"><td style="border:1px solid #ccc;padding:2px 5px;font-size:10px;font-weight:700;color:#E65100;line-height:1.2;text-align:center">初階<br>總計</td>';
+        days.forEach(function(d){ var n=allDaySums[d].junior; var sc=subMap[d]||1; rows+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
+        rows+='</tr>'; return;
       }
       if(item==='_SR'){
         if(filterCls && SENIOR.indexOf(filterCls)<0) return;
-        rows+='<tr style="background:#F3E5F5"><td style="border:1px solid #ccc;padding:2px 6px;font-size:11px;font-weight:700;color:#6A1B9A;text-align:center;line-height:1.2">進階<br>總計</td>';
-        allDays.forEach(function(d){ var n=allDaySums[d].senior; var sc=wdSubMap[d]||1; rows+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 6px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
-        rows+='<td style="border:1px solid #ccc;text-align:right;padding:2px 6px;font-size:12px;font-weight:700;color:'+(totalS>0?'#C0392B':'#bbb')+'">'+totalS+'</td></tr>';
-        return;
+        rows+='<tr style="background:#F3E5F5"><td style="border:1px solid #ccc;padding:2px 5px;font-size:10px;font-weight:700;color:#6A1B9A;line-height:1.2;text-align:center">進階<br>總計</td>';
+        days.forEach(function(d){ var n=allDaySums[d].senior; var sc=subMap[d]||1; rows+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
+        rows+='</tr>'; return;
       }
-      // regular class row
-      var cls=item;
-      if(filterCls && cls!==filterCls) return;
-      rows+='<tr><td style="border:1px solid #e0e0e0;padding:2px 6px;font-size:12px">';
-      rows+='<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:'+(FG[cls]||'#999')+';color:#fff;font-size:9px;font-weight:700">'+cls+'</span>';
-      rows+='</td>';
-      allDays.forEach(function(d){ var sc=wdSubMap[d]||1; rows+=cellV(allDaySums[d].byCls[cls]||0, sc); });
-      rows+=cellV(totalByCls[cls]||0,1);
+      if(filterCls && item!==filterCls) return;
+      rows+='<tr><td style="border:1px solid #e0e0e0;padding:2px 5px"><span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:'+(FG[item]||'#999')+';color:#fff;font-size:9px;font-weight:700">'+item+'</span></td>';
+      days.forEach(function(d){ var sc=subMap[d]||1; rows+=cellV(allDaySums[d].byCls[item]||0,sc); });
       rows+='</tr>';
     });
-
-    return '<div style="margin-top:16px"><div style="font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:6px">剩餘名額統計</div>'+
-      '<div style="overflow-x:auto"><table style="border-collapse:collapse;table-layout:fixed;font-size:12px">'+summaryColgroup+'<thead><tr>'+dayHeaders+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    return '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">'+cg+hdr+'<tbody>'+rows+'</tbody></table>';
   }
 
   function renderOccupancyTable(){
@@ -1745,15 +1728,25 @@ function formalVacancyRender(){
   var wdHTML=wdTimes.length?buildSection(wdDays,wdTimes,wdSub,false):'';
   var saHTML=(hasSat&&saTimes.length)?buildSection(['六'],saTimes,{'六':saSub},true):'';
 
+  // Build summary tables aligned with each section
+  var wdSumHTML=wdDays.length?renderSummaryTable(TW,CW,wdDays,wdSub):'';
+  var saSumHTML=(hasSat&&saTimes.length)?renderSummaryTable(TW,CW,['六'],{'六':saSub}):'';
+
   var out='<div style="overflow:auto;max-height:calc(100vh - 230px);padding:4px">';
   out+='<div style="display:flex;gap:6px;align-items:flex-start">';
-  if(wdHTML) out+='<div style="flex:0 0 '+wdW+'px;width:'+wdW+'px">'+wdHTML+'</div>';
-  if(saHTML) out+='<div style="flex:0 0 '+saW+'px;width:'+saW+'px">'+saHTML+'</div>';
+  if(wdHTML){
+    out+='<div style="flex:0 0 '+wdW+'px;width:'+wdW+'px">';
+    out+=wdHTML;
+    if(wdSumHTML) out+='<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:4px;padding-left:2px">剩餘名額統計</div>'+wdSumHTML;
+    out+='</div>';
+  }
+  if(saHTML){
+    out+='<div style="flex:0 0 '+saW+'px;width:'+saW+'px">';
+    out+=saHTML;
+    if(saSumHTML) out+='<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:4px;padding-left:2px">剩餘名額統計</div>'+saSumHTML;
+    out+='</div>';
+  }
   out+='</div>';
-  var allDaysForSummary=wdDays.concat(hasSat?['六']:[]);
-  var subMapForSummary=Object.assign({},wdSub);
-  if(hasSat) subMapForSummary['六']=saSub;
-  out+=renderSummaryTable(TW,CW,allDaysForSummary,subMapForSummary,hasSat,saSub);
   out+=renderOccupancyTable();
   out+='<div style="display:flex;gap:12px;font-size:11px;color:#666;margin-top:8px">';
   out+='<span>額滿：無數字</span>';
@@ -1872,8 +1865,8 @@ function formalGridRender(){
   var slots = hall==='北屯' ? SLOTS_B : SLOTS_X;
   var SUBCOLS = hall==='北屯' ? 3 : 2;
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
-  var BG = {A:'#FFEBEB',B:'#FFEBEB',N:'#FFEBEB',C:'#E0F4F4',D:'#E0F4F4',E:'#E8F5E9',F:'#E8F5E9'};
-  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#00796B',D:'#00796B',E:'#2E7D32',F:'#2E7D32'};
+  var BG = {A:'#FFEBEB',B:'#FFEBEB',N:'#FFEBEB',C:'#FFFAE8',D:'#FFFAE8',E:'#E8F5E9',F:'#E8F5E9'};
+  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#8D6E00',D:'#8D6E00',E:'#2E7D32',F:'#2E7D32'};
   var TBG = '#EEF2FF';
   var TW=52, CW=76, RH=148, HH=22;
 
@@ -2058,7 +2051,7 @@ function cmRender(){
   var slots = cmGetSlots();
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var CC = {A:'#FFD6D6',B:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
-  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#00796B',D:'#00796B',E:'#2E7D32',F:'#2E7D32'};
+  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#8D6E00',D:'#8D6E00',E:'#2E7D32',F:'#2E7D32'};
   var TBG='#EEF2FF', TW=52, CW=76;
 
   var cnt=document.getElementById('classmgmt-count');
