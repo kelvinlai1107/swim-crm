@@ -1482,6 +1482,12 @@ function formalViewRender(){
   else formalRender();
 }
 
+function formalViewRender(){
+  var gv = document.getElementById('formal-grid-view');
+  if(gv && gv.style.display !== 'none') formalGridRender();
+  else formalRender();
+}
+
 function formalGridRender(){
   if(typeof SLOTS_X==='undefined'||typeof SLOTS_B==='undefined') return;
   var hall = _formalHall||'';
@@ -1497,66 +1503,46 @@ function formalGridRender(){
   var BG  = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var FG  = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
   var TBG = '#EEF2FF';
-  var TW=56, CW=76, RH=148, HH=22;
+  // Fixed widths - never change
+  var TW=52, CW=72, RH=148, HH=22;
 
   // Filter values
-  var q       = (document.getElementById('q-formal').value||'').trim().toLowerCase();
+  var q             = (document.getElementById('q-formal').value||'').trim().toLowerCase();
   var filterCls     = (document.getElementById('f-formal-cls').value||'');
   var filterTeacher = (document.getElementById('f-formal-teacher').value||'');
 
-  var daySet={}, wdTS={}, saTS={};
-  slots.forEach(function(sl){
-    daySet[sl.day]=true;
-    if(sl.day==='六') saTS[sl.time]=true; else wdTS[sl.time]=true;
-  });
-
-  // Filter: only keep columns (day+cls+teacher) that match filter
   function colVisible(cls, teacher){
     if(filterCls && cls !== filterCls) return false;
     if(filterTeacher && teacher !== filterTeacher) return false;
     return true;
   }
 
-  // Build column list: (day, cls, teacher) that pass filter
-  var colSet = {};  // key = "day|cls|teacher"
+  // All days present in data
+  var daySet={}, wdTS={}, saTS={};
   slots.forEach(function(sl){
-    if(!colVisible(sl.cls, sl.teacher)) return;
-    var k = sl.day+'|'+sl.cls+'|'+sl.teacher;
-    if(!colSet[k]) colSet[k] = {day:sl.day, cls:sl.cls, teacher:sl.teacher, firstTime:sl.time};
-    else if(sl.time < colSet[k].firstTime) colSet[k].firstTime = sl.time;
+    daySet[sl.day]=true;
+    if(sl.day==='六') saTS[sl.time]=true; else wdTS[sl.time]=true;
   });
-  var allCols = Object.values(colSet).sort(function(a,b){
-    var dd = (DO[a.day]||0)-(DO[b.day]||0);
-    return dd || a.firstTime.localeCompare(b.firstTime);
-  });
-
-  // If filter active but no cols match
-  if((filterCls||filterTeacher) && allCols.length===0){
-    gv.innerHTML='<div style="padding:32px;text-align:center;color:var(--tx3)">無符合篩選的班別</div>';
-    return;
-  }
-
+  // ALWAYS use all 4 WD days (even if a day has no matching slots after filter)
   var wdDays = ['二','三','四','五'].filter(function(d){return daySet[d];});
   var hasSat = !!daySet['六'];
   var wdTimes = Object.keys(wdTS).sort();
   var saTimes = Object.keys(saTS).sort();
 
-  // When filter active, only show relevant days and times
+  // When filter active, narrow down times to only those with matching slots
   if(filterCls || filterTeacher){
-    var activeDays = new Set(allCols.map(function(c){return c.day;}));
-    wdDays = wdDays.filter(function(d){return activeDays.has(d);});
-    hasSat = activeDays.has('六');
-    // Only show times that have matching slots
     wdTimes = wdTimes.filter(function(t){
-      return allCols.some(function(c){ return c.day!=='六' && slots.some(function(s){ return s.day===c.day && s.time===t && s.cls===c.cls && s.teacher===c.teacher; }); });
+      return wdDays.some(function(d){
+        return slots.some(function(s){ return s.day===d && s.time===t && colVisible(s.cls,s.teacher); });
+      });
     });
     saTimes = saTimes.filter(function(t){
-      return allCols.some(function(c){ return c.day==='六' && slots.some(function(s){ return s.day==='六' && s.time===t && s.cls===c.cls && s.teacher===c.teacher; }); });
+      return slots.some(function(s){ return s.day==='六' && s.time===t && colVisible(s.cls,s.teacher); });
     });
   }
 
   function getSlots(day, time){
-    var res = [];
+    var res=[];
     slots.forEach(function(sl){
       if(sl.day===day && sl.time===time && colVisible(sl.cls,sl.teacher)) res.push(sl);
     });
@@ -1564,34 +1550,13 @@ function formalGridRender(){
     return res;
   }
 
-  // For each day, how many visible cols at max?
-  function subColsForDay(day){
-    if(!filterCls && !filterTeacher) return SUBCOLS;
-    var maxConcurrent = 0;
-    var allTimes2 = day==='六' ? saTimes : wdTimes;
-    allTimes2.forEach(function(t){
-      var n = getSlots(day, t).length;
-      if(n > maxConcurrent) maxConcurrent = n;
-    });
-    return Math.max(1, maxConcurrent);
-  }
-
-  var wdSubCols = {};
-  wdDays.forEach(function(d){ wdSubCols[d] = filterCls||filterTeacher ? subColsForDay(d) : SUBCOLS; });
-  var saSubCols = hasSat ? (filterCls||filterTeacher ? subColsForDay('六') : SUBCOLS) : 0;
-  var wdColCount = wdDays.reduce(function(s,d){return s+wdSubCols[d];},0);
-
-  // Search highlight helper
-  function matchQ(name){
-    return q && name && name.toLowerCase().indexOf(q) >= 0;
-  }
-
   var firstMatchId = null;
+  function matchQ(name){ return q && name && name.toLowerCase().indexOf(q)>=0; }
 
   function cellHTML(sl, rh){
-    if(!sl) return '<td style="width:'+CW+'px;border:1px solid #e0e0e0;background:#f9f9f9;height:'+rh+'px"></td>';
+    if(!sl) return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e0e0e0;background:#f9f9f9;height:'+rh+'px"></td>';
     var bg=BG[sl.cls]||'#fff', fg=FG[sl.cls]||'#333';
-    var h='<td style="width:'+CW+'px;border:1px solid #ccc;vertical-align:top;height:'+rh+'px;padding:0">';
+    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;height:'+rh+'px;padding:0">';
     h+='<div style="background:'+bg+';height:'+HH+'px;display:flex;align-items:center;justify-content:center;gap:3px;border-bottom:1px solid #ccc">';
     h+='<span style="width:17px;height:17px;border-radius:50%;background:'+fg+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+sl.cls+'</span>';
     h+='<span style="font-size:10px;color:#555;font-weight:600">'+sl.teacher+'</span></div>';
@@ -1599,33 +1564,37 @@ function formalGridRender(){
       if(s.empty){
         h+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
       } else {
-        var isMatch = matchQ(s.name);
+        var isMatch=matchQ(s.name);
+        if(isMatch && !firstMatchId){ firstMatchId='grid-match-first'; }
         var sp=s.special?'<span style="display:inline-flex;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;align-items:center;justify-content:center;vertical-align:middle">特</span>':'';
-        var matchId = isMatch && !firstMatchId ? 'grid-match-first' : '';
-        if(isMatch && !firstMatchId) firstMatchId = 'grid-match-first';
-        var hlBg = isMatch ? 'background:#FFF9C4;' : '';
-        var hlFg = isMatch ? 'color:#B8860B;font-weight:700;' : 'color:#222;';
-        h+='<div id="'+matchId+'" style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;'+hlFg+hlBg+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(CW-8)+'px">'+s.name+sp+'</div>';
+        var mid=isMatch&&firstMatchId==='grid-match-first'?'id="grid-match-first"':'';
+        var hlBg=isMatch?'background:#FFF9C4;':''; var hlFg=isMatch?'color:#B8860B;font-weight:700;':'color:#222;';
+        h+='<div '+mid+' style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;'+hlFg+hlBg+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(CW-8)+'px">'+s.name+sp+'</div>';
+        if(isMatch && firstMatchId==='grid-match-first') firstMatchId='done';
       }
     });
     return h+'</td>';
   }
 
-  var totalCols = 1 + wdColCount + (hasSat ? 2 + saSubCols : 0);
+  // WD table: always SUBCOLS per day, fixed width
+  var wdColCount = wdDays.length * SUBCOLS;
 
-  function buildSection(days, times, subColsMap, isSat){
-    if(days.length===0 || times.length===0) return '';
-    var nc = days.reduce(function(s,d){return s+(subColsMap[d]||1);},0);
-    var t = '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px'+(isSat?'':';margin-right:6px')+'">';
-    t += '<colgroup><col style="width:'+TW+'px">';
-    days.forEach(function(d){for(var i=0;i<(subColsMap[d]||1);i++) t+='<col style="width:'+CW+'px">';});
-    t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
-    t += '<th rowspan="2" style="position:sticky;left:0;z-index:20;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px;min-width:'+TW+'px">時段</th>';
+  function buildTable(days, times, subCols){
+    if(!times.length) return '';
+    var nc = days.length * subCols;
+    var tableW = TW + nc * CW;
+    var t='<table style="border-collapse:collapse;table-layout:fixed;width:'+tableW+'px;font-size:12px">';
+    t+='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px">';
+    for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
+    t+='</colgroup>';
+    // Header row 1
+    t+='<thead style="position:sticky;top:0;z-index:10"><tr>';
+    t+='<th rowspan="2" style="position:sticky;left:0;z-index:20;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px;min-width:'+TW+'px">時段</th>';
     days.forEach(function(d){
-      t+='<th colspan="'+(subColsMap[d]||1)+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
+      t+='<th colspan="'+subCols+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
     });
     t+='</tr><tr>';
-    days.forEach(function(d){ for(var i=0;i<(subColsMap[d]||1);i++) t+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px">班別</th>'; });
+    for(var i=0;i<nc;i++) t+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px;min-width:'+CW+'px">班別</th>';
     t+='</tr></thead><tbody>';
     var pg=-1;
     times.forEach(function(time){
@@ -1635,30 +1604,34 @@ function formalGridRender(){
       t+='<tr><td style="position:sticky;left:0;z-index:5;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px">'+time+'</td>';
       days.forEach(function(d){
         var ds=getSlots(d,time);
-        var sc=subColsMap[d]||1;
-        for(var si=0;si<sc;si++) t+=cellHTML(ds[si]||null,RH);
+        for(var si=0;si<subCols;si++) t+=cellHTML(ds[si]||null,RH);
       });
       t+='</tr>';
     });
-    t+='</tbody></table>';
-    return t;
+    return t+'</tbody></table>';
   }
 
-  var wdSub = {};
-  wdDays.forEach(function(d){ wdSub[d]=wdSubCols[d]; });
-  var saSub = {'六': saSubCols};
+  var wdTable = wdTimes.length ? buildTable(wdDays, wdTimes, SUBCOLS) : '';
 
-  var wdTable = buildSection(wdDays, wdTimes, wdSub, false);
-  var saTable = hasSat ? buildSection(['六'], saTimes, saSub, true) : '';
+  // SA: always SUBCOLS cols, fixed width
+  var saOnlyTimes = saTimes.filter(function(t){return !wdTS[t];});
+  var saSharedTimes = saTimes.filter(function(t){return !!wdTS[t];});
 
-  gv.innerHTML = '<div style="display:flex;align-items:flex-start;overflow:auto;max-height:calc(100vh - 230px)">'+wdTable+saTable+'</div>';
+  // Build SA column alongside WD where times overlap
+  // For simplicity: SA always as separate table on right
+  var saTable = '';
+  if(hasSat && saTimes.length){
+    saTable = buildTable(['六'], saTimes, SUBCOLS);
+  }
 
-  // Scroll to first match
+  var sep = (wdTable && saTable) ? '<div style="width:6px;flex-shrink:0"></div>' : '';
+  gv.innerHTML='<div style="display:flex;align-items:flex-start;overflow:auto;max-height:calc(100vh - 230px)">'+wdTable+sep+saTable+'</div>';
+
   if(q && firstMatchId){
     setTimeout(function(){
-      var el = document.getElementById('grid-match-first');
-      if(el) el.scrollIntoView({behavior:'smooth', block:'center', inline:'center'});
-    }, 100);
+      var el=document.getElementById('grid-match-first');
+      if(el) el.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+    },100);
   }
 }
 
