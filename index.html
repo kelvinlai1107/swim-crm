@@ -1489,6 +1489,12 @@ function formalViewRender(){
   else formalRender();
 }
 
+function formalViewRender(){
+  var gv = document.getElementById('formal-grid-view');
+  if(gv && gv.style.display !== 'none') formalGridRender();
+  else formalRender();
+}
+
 function formalGridRender(){
   if(typeof SLOTS_X==='undefined'||typeof SLOTS_B==='undefined') return;
   var hall = _formalHall||'';
@@ -1501,59 +1507,54 @@ function formalGridRender(){
   var slots = hall==='北屯' ? SLOTS_B : SLOTS_X;
   var SUBCOLS = hall==='北屯' ? 3 : 2;
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
-  var BG  = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
-  var FG  = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
+  var BG = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
+  var FG = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
   var TBG = '#EEF2FF';
-  // Fixed widths - never change
-  var TW=52, CW=72, RH=148, HH=22;
+  var TW = 52;   // time col width
+  var CW = 72;   // class col width
+  var RH = 148;  // row height (6 students × 21px + 22px header)
+  var HH = 22;   // class badge header height inside cell
 
-  // Filter values
+  // Filters
   var q             = (document.getElementById('q-formal').value||'').trim().toLowerCase();
   var filterCls     = (document.getElementById('f-formal-cls').value||'');
   var filterTeacher = (document.getElementById('f-formal-teacher').value||'');
 
-  function colVisible(cls, teacher){
-    if(filterCls && cls !== filterCls) return false;
-    if(filterTeacher && teacher !== filterTeacher) return false;
+  function colOK(cls, teacher){
+    if(filterCls && cls!==filterCls) return false;
+    if(filterTeacher && teacher!==filterTeacher) return false;
     return true;
   }
 
-  // All days present in data
-  var daySet={}, wdTS={}, saTS={};
+  // Collect days and times
+  var wdDaySet={}, saTimeSet={}, wdTimeSet={};
   slots.forEach(function(sl){
-    daySet[sl.day]=true;
-    if(sl.day==='六') saTS[sl.time]=true; else wdTS[sl.time]=true;
+    if(sl.day==='六') saTimeSet[sl.time]=true;
+    else { wdDaySet[sl.day]=true; wdTimeSet[sl.time]=true; }
   });
-  // ALWAYS use all 4 WD days (even if a day has no matching slots after filter)
-  var wdDays = ['二','三','四','五'].filter(function(d){return daySet[d];});
-  var hasSat = !!daySet['六'];
-  var wdTimes = Object.keys(wdTS).sort();
-  var saTimes = Object.keys(saTS).sort();
+  var wdDays = ['二','三','四','五'].filter(function(d){return wdDaySet[d];});
+  var hasSat = slots.some(function(sl){return sl.day==='六';});
+  var wdTimes = Object.keys(wdTimeSet).sort();
+  var saTimes = Object.keys(saTimeSet).sort();
 
-  // When filter active, narrow down times to only those with matching slots
+  // When filter active: only keep times that have matching slots
   if(filterCls || filterTeacher){
     wdTimes = wdTimes.filter(function(t){
-      return wdDays.some(function(d){
-        return slots.some(function(s){ return s.day===d && s.time===t && colVisible(s.cls,s.teacher); });
-      });
+      return wdDays.some(function(d){ return slots.some(function(s){ return s.day===d&&s.time===t&&colOK(s.cls,s.teacher); }); });
     });
     saTimes = saTimes.filter(function(t){
-      return slots.some(function(s){ return s.day==='六' && s.time===t && colVisible(s.cls,s.teacher); });
+      return slots.some(function(s){ return s.day==='六'&&s.time===t&&colOK(s.cls,s.teacher); });
     });
   }
 
   function getSlots(day, time){
-    var res=[];
-    slots.forEach(function(sl){
-      if(sl.day===day && sl.time===time && colVisible(sl.cls,sl.teacher)) res.push(sl);
-    });
-    res.sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);});
-    return res;
+    var r=[];
+    slots.forEach(function(s){ if(s.day===day&&s.time===time&&colOK(s.cls,s.teacher)) r.push(s); });
+    r.sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);});
+    return r;
   }
 
-  var firstMatchId = null;
-  function matchQ(name){ return q && name && name.toLowerCase().indexOf(q)>=0; }
-
+  var firstMatch = null;
   function cellHTML(sl, rh){
     if(!sl) return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e0e0e0;background:#f9f9f9;height:'+rh+'px"></td>';
     var bg=BG[sl.cls]||'#fff', fg=FG[sl.cls]||'#333';
@@ -1565,78 +1566,95 @@ function formalGridRender(){
       if(s.empty){
         h+='<div style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;color:#ccc;font-size:11px">—</div>';
       } else {
-        var isMatch=matchQ(s.name);
-        if(isMatch && !firstMatchId){ firstMatchId='grid-match-first'; }
+        var isM=q&&s.name&&s.name.toLowerCase().indexOf(q)>=0;
+        if(isM&&!firstMatch) firstMatch='gm0';
         var sp=s.special?'<span style="display:inline-flex;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;align-items:center;justify-content:center;vertical-align:middle">特</span>':'';
-        var mid=isMatch&&firstMatchId==='grid-match-first'?'id="grid-match-first"':'';
-        var hlBg=isMatch?'background:#FFF9C4;':''; var hlFg=isMatch?'color:#B8860B;font-weight:700;':'color:#222;';
-        h+='<div '+mid+' style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;'+hlFg+hlBg+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(CW-8)+'px">'+s.name+sp+'</div>';
-        if(isMatch && firstMatchId==='grid-match-first') firstMatchId='done';
+        var mid=(isM&&firstMatch==='gm0')?'id="gm0"':'';
+        if(isM&&firstMatch==='gm0') firstMatch='done';
+        h+='<div '+mid+' style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;'+(isM?'background:#FFF9C4;color:#B8860B;font-weight:700;':'color:#222;')+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(CW-8)+'px">'+s.name+sp+'</div>';
       }
     });
     return h+'</td>';
   }
 
-  // WD table: always SUBCOLS per day, fixed width
-  var wdColCount = wdDays.length * SUBCOLS;
-
-  function buildTable(days, times, subCols, noSticky){
-    if(!times.length) return '';
-    var nc = days.length * subCols;
-    var tableW = TW + nc * CW;
-    var t='<table style="border-collapse:collapse;table-layout:fixed;width:'+tableW+'px;font-size:12px">';
-    t+='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
-    for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
-    t+='</colgroup>';
-    // Header row 1
-    t+='<thead style="'+(noSticky?'':'position:sticky;top:0;z-index:10')+'"><tr>';
-    t+='<th rowspan="2" style="'+(noSticky?'':'position:sticky;left:0;z-index:20;')+' border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">時段</th>';
-    days.forEach(function(d){
-      t+='<th colspan="'+subCols+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
-    });
-    t+='</tr><tr>';
-    for(var i=0;i<nc;i++) t+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0;width:'+CW+'px;min-width:'+CW+'px">班別</th>';
-    t+='</tr></thead><tbody>';
-    var pg=-1;
-    times.forEach(function(time){
-      var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
-      if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
-      pg=grp;
-      t+='<tr><td style="'+(noSticky?'':'position:sticky;left:0;z-index:5;')+';border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">'+time+'</td>';
-      days.forEach(function(d){
-        var ds=getSlots(d,time);
-        for(var si=0;si<subCols;si++) t+=cellHTML(ds[si]||null,RH);
-      });
-      t+='</tr>';
-    });
-    return t+'</tbody></table>';
+  // Merged time list: WD times + SA-only times interleaved
+  var saOnly = saTimes.filter(function(t){return !wdTimeSet[t];});
+  var allTimes = [];
+  var wi=0, si=0;
+  var wdA = wdTimes.slice(), saA = saOnly.slice();
+  while(wi<wdA.length||si<saA.length){
+    if(si>=saA.length||(wi<wdA.length&&wdA[wi]<=saA[si])){ allTimes.push({t:wdA[wi],isWd:true,isSa:!!saTimeSet[wdA[wi]]}); wi++; }
+    else { allTimes.push({t:saA[si],isWd:false,isSa:true}); si++; }
   }
 
-  var wdTable = wdTimes.length ? buildTable(wdDays, wdTimes, SUBCOLS) : '';
+  // Table structure: time | WD cols × N days | separator | SA-time | SA cols × SUBCOLS
+  var wdNC = wdDays.length * SUBCOLS;
+  var saNC = hasSat ? SUBCOLS : 0;
+  var totalNC = 1 + wdNC + (hasSat ? 1 + 1 + saNC : 0);
+  // separator col width = TW (same as time col)
 
-  // SA: always SUBCOLS cols, fixed width
-  var saOnlyTimes = saTimes.filter(function(t){return !wdTS[t];});
-  var saSharedTimes = saTimes.filter(function(t){return !!wdTS[t];});
-
-  // Build SA column alongside WD where times overlap
-  // For simplicity: SA always as separate table on right
-  var saTable = '';
-  if(hasSat && saTimes.length){
-    saTable = buildTable(['六'], saTimes, SUBCOLS);
+  var html = '<div style="overflow:auto;max-height:calc(100vh - 230px)">';
+  html += '<table style="border-collapse:collapse;table-layout:fixed;font-size:12px">';
+  // colgroup
+  html += '<colgroup>';
+  html += '<col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';  // WD time
+  for(var i=0;i<wdNC;i++) html += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
+  if(hasSat){
+    html += '<col style="width:8px;min-width:8px;max-width:8px">';               // separator
+    html += '<col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';// SA time
+    for(var i=0;i<saNC;i++) html += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
   }
+  html += '</colgroup>';
 
-  // Give each table its own fixed-width scroll container
-  var wdW = TW + wdDays.length * SUBCOLS * CW;
-  var saW = TW + SUBCOLS * CW;
-  var htmlOut = '<div style="display:flex;gap:6px;overflow-x:auto">';
-  if(wdTable) htmlOut += '<div style="width:'+wdW+'px;min-width:'+wdW+'px;max-width:'+wdW+'px;overflow:auto;max-height:calc(100vh - 230px)">'+wdTable+'</div>';
-  if(saTable) htmlOut += '<div style="width:'+saW+'px;min-width:'+saW+'px;max-width:'+saW+'px;overflow:auto;max-height:calc(100vh - 230px)">'+saTable+'</div>';
-  htmlOut += '</div>';
-  gv.innerHTML = htmlOut;
+  // Header row 1: day names
+  html += '<thead style="position:sticky;top:0;z-index:10"><tr>';
+  html += '<th rowspan="2" style="position:sticky;left:0;z-index:20;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
+  wdDays.forEach(function(d){
+    html += '<th colspan="'+SUBCOLS+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
+  });
+  if(hasSat){
+    html += '<th rowspan="2" style="width:8px;min-width:8px;max-width:8px;border:none;background:#ddd;padding:0"></th>';
+    html += '<th rowspan="2" style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
+    html += '<th colspan="'+saNC+'" style="border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週六</th>';
+  }
+  html += '</tr>';
+  // Header row 2: 班別 labels
+  html += '<tr>';
+  for(var i=0;i<wdNC;i++) html += '<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+  if(hasSat) for(var i=0;i<saNC;i++) html += '<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+  html += '</tr></thead><tbody>';
 
-  if(q && firstMatchId){
+  // Data rows
+  var prevGrp = -1;
+  allTimes.forEach(function(row){
+    var time=row.t, isWd=row.isWd, isSa=row.isSa;
+    var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
+    if(prevGrp>=0&&grp!==prevGrp) html+='<tr><td colspan="'+totalNC+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
+    prevGrp=grp;
+    html += '<tr>';
+    // WD time cell (sticky)
+    html += '<td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:'+(isWd?'#333':'#ccc')+';vertical-align:middle;height:'+RH+'px">'+(isWd?time:'')+'</td>';
+    // WD class cols
+    wdDays.forEach(function(d){
+      var ds = isWd ? getSlots(d,time) : [];
+      for(var si=0;si<SUBCOLS;si++) html += cellHTML(ds[si]||null, RH);
+    });
+    // SA section
+    if(hasSat){
+      html += '<td style="width:8px;min-width:8px;max-width:8px;border:none;background:#ddd;padding:0"></td>';
+      html += '<td style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:'+(isSa?'#333':'#ccc')+';vertical-align:middle">'+(isSa?time:'')+'</td>';
+      var saSlots = isSa ? getSlots('六',time) : [];
+      for(var si=0;si<saNC;si++) html += cellHTML(saSlots[si]||null, RH);
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  gv.innerHTML = html;
+
+  if(q && firstMatch){
     setTimeout(function(){
-      var el=document.getElementById('grid-match-first');
+      var el=document.getElementById('gm0');
       if(el) el.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
     },100);
   }
