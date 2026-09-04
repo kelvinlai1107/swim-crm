@@ -1632,17 +1632,24 @@ function formalGridRender(){
     if(prevGrp>=0&&grp!==prevGrp) html+='<tr><td colspan="'+totalNC+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
     prevGrp=grp;
     html += '<tr>';
+    // SA-only rows: skip WD section entirely by collapsing height to 0
+    var rowH = isWd ? RH : 0;
     // WD time cell (sticky)
-    html += '<td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:'+(isWd?'#333':'#ccc')+';vertical-align:middle;height:'+RH+'px">'+(isWd?time:'')+'</td>';
-    // WD class cols
-    wdDays.forEach(function(d){
-      var ds = isWd ? getSlots(d,time) : [];
-      for(var si=0;si<SUBCOLS;si++) html += cellHTML(ds[si]||null, RH);
-    });
+    if(isWd){
+      html += '<td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px">'+time+'</td>';
+      wdDays.forEach(function(d){
+        var ds = getSlots(d,time);
+        for(var si=0;si<SUBCOLS;si++) html += cellHTML(ds[si]||null, RH);
+      });
+    } else {
+      // SA-only: empty WD cells with height 0 (invisible)
+      html += '<td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:none;padding:0;height:0"></td>';
+      for(var si=0;si<wdNC;si++) html += '<td style="width:'+CW+'px;border:none;padding:0;height:0"></td>';
+    }
     // SA section
     if(hasSat){
-      html += '<td style="width:8px;min-width:8px;max-width:8px;border:none;background:#ddd;padding:0"></td>';
-      html += '<td style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:'+(isSa?'#333':'#ccc')+';vertical-align:middle">'+(isSa?time:'')+'</td>';
+      html += '<td style="width:8px;min-width:8px;max-width:8px;border:none;background:#ddd;padding:0;height:'+(isWd?RH:RH)+'px"></td>';
+      html += '<td style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:'+(isSa?'#333':'#ccc')+';vertical-align:middle;height:'+RH+'px">'+(isSa?time:'')+'</td>';
       var saSlots = isSa ? getSlots('六',time) : [];
       for(var si=0;si<saNC;si++) html += cellHTML(saSlots[si]||null, RH);
     }
