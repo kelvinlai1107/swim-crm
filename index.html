@@ -1635,9 +1635,11 @@ function formalGridRender(){
   var wdHTML = wdTimes.length ? buildWDTable() : '';
   var saHTML = buildSATable();
 
+    var wdW = TW + wdDays.length * SUBCOLS * CW;
+  var saW = TW + SUBCOLS * CW;
   gv.innerHTML = '<div style="overflow:auto;max-height:calc(100vh - 230px)"><div style="display:flex;gap:6px;align-items:flex-start">'+
-    (wdHTML?'<div style="flex:none">'+wdHTML+'</div>':'')+
-    (saHTML?'<div style="flex:none">'+saHTML+'</div>':'')+
+    (wdHTML?'<div style="flex:none;width:'+wdW+'px;overflow:hidden">'+wdHTML+'</div>':'')+
+    (saHTML?'<div style="flex:none;width:'+saW+'px;overflow:hidden">'+saHTML+'</div>':'')+
     '</div></div>';
 
   if(q && firstMatch){
