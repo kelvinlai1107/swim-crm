@@ -1468,7 +1468,7 @@ function formalVacancyRender(){
   }
 
   var BG = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
-  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#8D6E00',D:'#8D6E00',E:'#2E7D32',F:'#2E7D32'};
+  var FG = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
 
   var filterCls     = (document.getElementById('f-formal-cls')||{}).value||'';
@@ -1598,9 +1598,13 @@ function formalVacancyRender(){
     return {byCls:byCls, junior:jEmpty, senior:sEmpty};
   }
 
-  function renderSummaryTable(TW, CW, allDays, subMap){
+  function renderSummaryTable(TW, CW, wdDaysArg, wdSubArg, hasSatArg, saSubArg, saDaysArg){
     var ORDER = ['N','A','C','E','_JR','B','D','F','_SR'];
     var JUNIOR=['N','A','C','E'], SENIOR=['B','D','F'];
+    var allDays = wdDaysArg.concat(hasSatArg && saDaysArg ? saDaysArg : []);
+    var allSubMap = Object.assign({}, wdSubArg);
+    if(hasSatArg && saDaysArg) saDaysArg.forEach(function(d){ allSubMap[d]=saSubArg; });
+
     var allDaySums={};
     allDays.forEach(function(d){ allDaySums[d]=daySummary(d); });
     var totalByCls={}, totalJ=0, totalS=0;
@@ -1609,51 +1613,73 @@ function formalVacancyRender(){
       totalJ+=allDaySums[d].junior; totalS+=allDaySums[d].senior;
     });
     function vc(n){ return n>0?(n<=3?'#E67E22':'#C0392B'):'#bbb'; }
-    function cellV(n,sc){
-      return '<td colspan="'+(sc||1)+'" style="border:1px solid #e0e0e0;text-align:right;padding:2px 5px;font-size:12px;font-weight:'+(n>0?'700':'400')+';color:'+vc(n)+'">'+n+'</td>';
+    function cellV(n,sc,extra){
+      return '<td colspan="'+(sc||1)+'" style="border:1px solid #e0e0e0;text-align:right;padding:2px 5px;font-size:12px;font-weight:'+(n>0?'700':'400')+';color:'+vc(n)+(extra||'')+'">'+n+'</td>';
     }
-    // Build colgroup: label col + all day cols + total col
-    var cg='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
-    allDays.forEach(function(d){ var sc=subMap[d]||1; for(var i=0;i<sc;i++) cg+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">'; });
+    // Colgroup: label + WD cols + 6px gap (if SA) + SA cols + total
+    var wdColCount = wdDaysArg.reduce(function(s,d){return s+(wdSubArg[d]||1);},0);
+    var cg='<colgroup>';
+    cg+='<col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
+    wdDaysArg.forEach(function(d){ var sc=wdSubArg[d]||1; for(var i=0;i<sc;i++) cg+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">'; });
+    if(hasSatArg && saDaysArg && saDaysArg.length){
+      cg+='<col style="width:6px;min-width:6px;max-width:6px">';  // gap matching flex gap
+      saDaysArg.forEach(function(d){ for(var i=0;i<saSubArg;i++) cg+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">'; });
+    }
     cg+='<col style="width:48px;min-width:48px;max-width:48px"></colgroup>';
+
     // Header
     var hdr='<thead><tr>';
     hdr+='<th style="border:1px solid #ccc;background:#f0f4ff;font-size:11px;padding:2px 4px;width:'+TW+'px;text-align:center">班別</th>';
-    allDays.forEach(function(d){
-      var sc=subMap[d]||1;
+    wdDaysArg.forEach(function(d){
+      var sc=wdSubArg[d]||1;
       hdr+='<th colspan="'+sc+'" style="width:'+(sc*CW)+'px;min-width:'+(sc*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:10px;font-weight:700;text-align:center;padding:2px">週'+d+' <span style="font-size:9px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
     });
+    if(hasSatArg && saDaysArg && saDaysArg.length){
+      hdr+='<th rowspan="1" style="width:6px;min-width:6px;max-width:6px;border:none;background:#ddd;padding:0"></th>';
+      saDaysArg.forEach(function(d){
+        hdr+='<th colspan="'+saSubArg+'" style="width:'+(saSubArg*CW)+'px;min-width:'+(saSubArg*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:10px;font-weight:700;text-align:center;padding:2px">週'+d+' <span style="font-size:9px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
+      });
+    }
     hdr+='<th style="border:1px solid #ccc;background:#FFF9C4;font-size:10px;font-weight:700;text-align:center;padding:2px;color:#B8860B;width:48px">總計</th>';
     hdr+='</tr></thead>';
+
     // Rows
     var rows='';
+    function buildDataRow(cls, label, rowBg){
+      var r='<tr'+(rowBg?' style="background:'+rowBg+'"':'')+'>'+
+        '<td style="border:1px solid #e0e0e0;padding:2px 4px;text-align:center">'+(label||
+        '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:'+(FG[cls]||'#999')+';color:#fff;font-size:9px;font-weight:700">'+cls+'</span>')+
+        '</td>';
+      wdDaysArg.forEach(function(d){ var sc=wdSubArg[d]||1; r+=cellV(allDaySums[d].byCls[cls]||0,sc); });
+      if(hasSatArg && saDaysArg && saDaysArg.length){
+        r+='<td style="width:6px;min-width:6px;max-width:6px;border:none;background:#ddd;padding:0"></td>';
+        saDaysArg.forEach(function(d){ r+=cellV(allDaySums[d].byCls[cls]||0,saSubArg); });
+      }
+      var tot=totalByCls[cls]||0;
+      r+='<td style="border:1px solid #FFF9C4;background:#FFF9C4;text-align:right;padding:2px 5px;font-size:12px;font-weight:'+(tot>0?'700':'400')+';color:'+vc(tot)+'">'+tot+'</td>';
+      r+='</tr>';
+      return r;
+    }
+    function buildSubtotalRow(label, jOrS, bgColor, textColor){
+      var total = jOrS==='J'?totalJ:totalS;
+      var r='<tr style="background:'+bgColor+'">'+
+        '<td style="border:1px solid #ccc;padding:2px 4px;font-size:10px;font-weight:700;color:'+textColor+';text-align:center;line-height:1.2">'+label+'</td>';
+      wdDaysArg.forEach(function(d){ var n=allDaySums[d][jOrS==='J'?'junior':'senior']; var sc=wdSubArg[d]||1; r+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
+      if(hasSatArg && saDaysArg && saDaysArg.length){
+        r+='<td style="width:6px;border:none;background:#ddd;padding:0"></td>';
+        saDaysArg.forEach(function(d){ var n=allDaySums[d][jOrS==='J'?'junior':'senior']; r+='<td colspan="'+saSubArg+'" style="border:1px solid #ccc;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
+      }
+      r+='<td style="border:1px solid #FFF9C4;background:#FFF9C4;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(total>0?'#C0392B':'#bbb')+'">'+total+'</td></tr>';
+      return r;
+    }
+
     ORDER.forEach(function(item){
-      if(item==='_JR'){
-        if(filterCls && JUNIOR.indexOf(filterCls)<0) return;
-        rows+='<tr style="background:#FFF8E1">';
-        rows+='<td style="border:1px solid #ccc;padding:2px 4px;font-size:10px;font-weight:700;color:#E65100;text-align:center;line-height:1.2">初階<br>總計</td>';
-        allDays.forEach(function(d){ var n=allDaySums[d].junior; var sc=subMap[d]||1; rows+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
-        rows+='<td style="border:1px solid #FFF9C4;background:#FFF9C4;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(totalJ>0?'#C0392B':'#bbb')+'">'+totalJ+'</td></tr>';
-        return;
-      }
-      if(item==='_SR'){
-        if(filterCls && SENIOR.indexOf(filterCls)<0) return;
-        rows+='<tr style="background:#F3E5F5">';
-        rows+='<td style="border:1px solid #ccc;padding:2px 4px;font-size:10px;font-weight:700;color:#6A1B9A;text-align:center;line-height:1.2">進階<br>總計</td>';
-        allDays.forEach(function(d){ var n=allDaySums[d].senior; var sc=subMap[d]||1; rows+='<td colspan="'+sc+'" style="border:1px solid #ccc;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(n>0?'#C0392B':'#bbb')+'">'+n+'</td>'; });
-        rows+='<td style="border:1px solid #FFF9C4;background:#FFF9C4;text-align:right;padding:2px 5px;font-size:12px;font-weight:700;color:'+(totalS>0?'#C0392B':'#bbb')+'">'+totalS+'</td></tr>';
-        return;
-      }
+      if(item==='_JR'){ if(!filterCls||JUNIOR.indexOf(filterCls)>=0) rows+=buildSubtotalRow('初階<br>總計','J','#FFF8E1','#E65100'); return; }
+      if(item==='_SR'){ if(!filterCls||SENIOR.indexOf(filterCls)>=0) rows+=buildSubtotalRow('進階<br>總計','S','#F3E5F5','#6A1B9A'); return; }
       if(filterCls && item!==filterCls) return;
-      rows+='<tr>';
-      rows+='<td style="border:1px solid #e0e0e0;padding:2px 4px;text-align:center">';
-      rows+='<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:'+(FG[item]||'#999')+';color:#fff;font-size:9px;font-weight:700">'+item+'</span>';
-      rows+='</td>';
-      allDays.forEach(function(d){ var sc=subMap[d]||1; rows+=cellV(allDaySums[d].byCls[item]||0,sc); });
-      var tot=totalByCls[item]||0;
-      rows+='<td style="border:1px solid #FFF9C4;background:#FFF9C4;text-align:right;padding:2px 5px;font-size:12px;font-weight:'+(tot>0?'700':'400')+';color:'+vc(tot)+'">'+tot+'</td>';
-      rows+='</tr>';
+      rows+=buildDataRow(item);
     });
+
     return '<div style="margin-top:8px"><div style="font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:4px">剩餘名額統計</div>'+
       '<div style="overflow-x:auto"><table style="border-collapse:collapse;table-layout:fixed;font-size:12px">'+cg+hdr+'<tbody>'+rows+'</tbody></table></div></div>';
   }
@@ -1725,7 +1751,7 @@ function formalVacancyRender(){
 
     return '<div style="margin-top:20px;max-width:340px">'+
       '<div style="font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:6px">滿班率統計</div>'+
-      '<table style="border-collapse:collapse;font-size:12px;width:100%">'+
+      '<table style="border-collapse:collapse;font-size:12px;width:auto">'+
       '<thead><tr>'+
       '<th style="border:1px solid #ccc;background:#f5f5f5;padding:4px 6px;text-align:center;width:40px">班別</th>'+
       '<th style="border:1px solid #ccc;background:#f5f5f5;padding:4px 10px;text-align:right">名額</th>'+
@@ -1739,10 +1765,7 @@ function formalVacancyRender(){
   var wdHTML=wdTimes.length?buildSection(wdDays,wdTimes,wdSub,false):'';
   var saHTML=(hasSat&&saTimes.length)?buildSection(['六'],saTimes,{'六':saSub},true):'';
 
-  var allDaysAll=wdDays.concat(hasSat?['六']:[]);
-  var subMapAll=Object.assign({},wdSub);
-  if(hasSat) subMapAll['六']=saSub;
-  var sumHTML=allDaysAll.length?renderSummaryTable(TW,CW,allDaysAll,subMapAll):'';
+  var sumHTML=wdDays.length?renderSummaryTable(TW,CW,wdDays,wdSub,hasSat,saSub,hasSat?['六']:[]):'';
 
   var out='<div style="overflow:auto;max-height:calc(100vh - 230px);padding:4px">';
   out+='<div style="display:flex;gap:6px;align-items:flex-start">';
@@ -1869,7 +1892,7 @@ function formalGridRender(){
   var SUBCOLS = hall==='北屯' ? 3 : 2;
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var BG = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
-  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#8D6E00',D:'#8D6E00',E:'#2E7D32',F:'#2E7D32'};
+  var FG = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var TBG = '#EEF2FF';
   var TW=52, CW=76, RH=148, HH=22;
 
@@ -2054,7 +2077,7 @@ function cmRender(){
   var slots = cmGetSlots();
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var CC = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
-  var FG = {A:'#C62828',B:'#C62828',N:'#C62828',C:'#8D6E00',D:'#8D6E00',E:'#2E7D32',F:'#2E7D32'};
+  var FG = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var TBG='#EEF2FF', TW=52, CW=76;
 
   var cnt=document.getElementById('classmgmt-count');
