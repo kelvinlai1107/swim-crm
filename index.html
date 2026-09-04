@@ -1516,7 +1516,7 @@ function formalGridRender(){
   var BG = {A:'#FFD6D6',B:'#FFD6D6',N:'#FFD6D6',C:'#FFF3CC',D:'#FFF3CC',E:'#D5EFD5',F:'#D5E8F5'};
   var FG = {A:'#B30000',B:'#B30000',N:'#B30000',C:'#7A5C00',D:'#7A5C00',E:'#1B5E20',F:'#0D47A1'};
   var TBG = '#EEF2FF';
-  var TW=44, CW=60, RH=148, HH=22;
+  var TW=52, CW=76, RH=148, HH=22;
 
   var q             = (document.getElementById('q-formal').value||'').trim().toLowerCase();
   var filterCls     = (document.getElementById('f-formal-cls').value||'');
@@ -1571,7 +1571,7 @@ function formalGridRender(){
         var sp=s.special?'<span style="display:inline-flex;width:12px;height:12px;border-radius:50%;background:#FDEBD0;color:#C05E00;font-size:7px;font-weight:700;border:1px solid #F0A060;margin-left:2px;align-items:center;justify-content:center;vertical-align:middle">特</span>':'';
         var mid=(isM&&firstMatch==='gm0')?'id="gm0"':'';
         if(isM&&firstMatch==='gm0') firstMatch='done';
-        h+='<div '+mid+' style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;'+(isM?'background:#FFF9C4;color:#B8860B;font-weight:700;':'color:#222;')+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(CW-8)+'px">'+s.name+sp+'</div>';
+        h+='<div '+mid+' style="height:21px;border-bottom:1px solid #f0f0f0;padding:2px 5px;font-size:11px;'+(isM?'background:#FFF9C4;color:#B8860B;font-weight:700;':'color:#222;')+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:'+(CW-2)+'px">'+s.name+sp+'</div>';
       }
     });
     return h+'</td>';
@@ -1596,7 +1596,7 @@ function formalGridRender(){
       var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
       if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
       pg=grp;
-      t += '<tr><td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:12px;color:#333;vertical-align:middle;height:'+RH+'px">'+time+'</td>';
+      t += '<tr><td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;vertical-align:middle;height:'+RH+'px;padding:0 2px">'+time+'</td>';
       wdDays.forEach(function(d){
         var ds=getSlots(d,time);
         for(var si=0;si<SUBCOLS;si++) t+=cellHTML(ds[si]||null,RH);
