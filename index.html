@@ -2331,9 +2331,11 @@ function cmRender(){
   // slot index finder
   function findIdx(sl){ return slots.indexOf(sl); }
 
-  function cellHTML(sl){
+  function cellHTML(sl, day, time){
     if(!sl){
-      return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e8e8e8;background:#f9f9f9"></td>';
+      return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e8e8e8;background:#f9f9f9;cursor:pointer;vertical-align:middle;text-align:center" '+
+        'onclick="cmOpenAddAt(\''+day+'\',\''+time+'\')">'+
+        '<span style="color:#ccc;font-size:18px;line-height:1">＋</span></td>';
     }
     var idx=findIdx(sl);
     var bg=CC[sl.cls]||'#eee', fg=FG[sl.cls]||'#333';
@@ -2371,7 +2373,7 @@ function cmRender(){
       t+='<tr><td style="position:sticky;left:0;z-index:5;width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;vertical-align:middle;padding:0 2px">'+time+'</td>';
       days.forEach(function(d){
         var ds=getSlots(d,time);
-        for(var si=0;si<SUBCOLS;si++) t+=cellHTML(ds[si]||null);
+        for(var si=0;si<SUBCOLS;si++) t+=cellHTML(ds[si]||null, d, time);
       });
       t+='</tr>';
     });
