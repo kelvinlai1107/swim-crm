@@ -398,9 +398,39 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
       <button class="formal-hall-btn active" data-cmhall="X" onclick="cmSetHall(this,'X')">西屯館</button>
       <button class="formal-hall-btn" data-cmhall="B" onclick="cmSetHall(this,'B')">北屯館</button>
     </div>
-    <button class="btn bp sm" style="margin-left:auto" onclick="cmOpenAdd()">＋ 新增班次</button>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="btn bs sm" id="cm-copy-btn" onclick="cmOpenCopySeason()">📋 複製課表</button>
+      <button class="btn bp sm" onclick="cmOpenAdd()">＋ 新增班次</button>
+    </div>
   </div>
   <div id="cm-grid-wrap" style="overflow:auto;max-height:calc(100vh - 220px)"></div>
+</div>
+
+<!-- 班級管理 - 複製課表 Modal -->
+<div class="mgmt-ov" id="cm-copy-modal">
+  <div class="mgmt-pn" style="width:420px">
+    <div class="mgmt-hd">
+      <span style="font-size:15px;font-weight:700">複製課表</span>
+      <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById('cm-copy-modal').classList.remove('open')">×</button>
+    </div>
+    <div class="mgmt-bd" style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:13px;color:var(--tx2)">將選擇的學期課表複製到目前學期（<span id="cm-copy-target-label" style="font-weight:700;color:var(--pr)"></span>），複製後學員名單全部清空。</div>
+      <label style="font-size:13px;font-weight:500">選擇來源學期
+        <select class="fs" id="cm-copy-src" style="width:100%;margin-top:6px"></select>
+      </label>
+      <label style="font-size:13px;font-weight:500">複製範圍
+        <div style="display:flex;gap:12px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:13px"><input type="checkbox" id="cm-copy-x" checked> 西屯館</label>
+          <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:13px"><input type="checkbox" id="cm-copy-b" checked> 北屯館</label>
+        </div>
+      </label>
+      <div style="background:#FFF3CD;border:1px solid #FFCC00;border-radius:6px;padding:10px 12px;font-size:12px;color:#856404">⚠️ 複製後目前學期班次將被取代，學員名單全部清空，無法復原。</div>
+    </div>
+    <div class="mgmt-ft">
+      <button class="btn bs sm" onclick="document.getElementById('cm-copy-modal').classList.remove('open')">取消</button>
+      <button class="btn bp sm" style="background:#E53935" onclick="cmExecuteCopy()">確定複製</button>
+    </div>
+  </div>
 </div>
 
 <!-- 班級管理 - 新增/編輯 Modal -->
@@ -2203,6 +2233,55 @@ function cmSaveLocal(){
 function cmInit(){
   cmRender();
 }
+// ── 班級管理：複製課表 ──────────────────────────────────────────────────────
+function cmOpenCopySeason(){
+  var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
+  var sel=document.getElementById('cm-copy-src');
+  if(sel){
+    sel.innerHTML='';
+    ['S1','S2','S3'].forEach(function(s){
+      if(s!==_curSeason){
+        var o=document.createElement('option');
+        o.value=s; o.textContent='2026 '+s+' '+SLB[s];
+        sel.appendChild(o);
+      }
+    });
+    if(_curSeason==='S3') sel.value='S2';
+  }
+  var lbl=document.getElementById('cm-copy-target-label');
+  if(lbl) lbl.textContent='2026 '+_curSeason+' '+SLB[_curSeason];
+  document.getElementById('cm-copy-modal').classList.add('open');
+}
+
+function cmExecuteCopy(){
+  var src=document.getElementById('cm-copy-src').value;
+  var copyX=document.getElementById('cm-copy-x').checked;
+  var copyB=document.getElementById('cm-copy-b').checked;
+  var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
+  if(!copyX&&!copyB){alert('請至少選擇一個館別');return;}
+
+  function getSrcSlots(s,hall){
+    if(s==='S2') return hall==='X'?(_baseSlotX?JSON.parse(JSON.stringify(_baseSlotX)):[]):(_baseSlotB?JSON.parse(JSON.stringify(_baseSlotB)):[]);
+    try{var saved=localStorage.getItem('crm_slots_'+(hall==='X'?'x':'b')+'_'+s); return saved?JSON.parse(saved):[];}catch(e){return [];}
+  }
+  function clearStudents(slots){
+    return JSON.parse(JSON.stringify(slots)).map(function(sl){
+      sl.students=sl.students.map(function(s){return {order:s.order,name:'',special:false,upgrade:'',empty:true};});
+      return sl;
+    });
+  }
+
+  var ok=false;
+  if(copyX){var sx=getSrcSlots(src,'X'); if(sx.length){SLOTS_X=clearStudents(sx);SEAT_X=[];ok=true;}else alert(SLB[src]+' 西屯館無資料');}
+  if(copyB){var sb=getSrcSlots(src,'B'); if(sb.length){SLOTS_B=clearStudents(sb);SEAT_B=[];ok=true;}else alert(SLB[src]+' 北屯館無資料');}
+  if(ok){
+    cmSaveLocal();
+    document.getElementById('cm-copy-modal').classList.remove('open');
+    cmRender();
+    alert('✓ 已複製 '+SLB[src]+' 課表到 2026 '+_curSeason+' '+SLB[_curSeason]+'，學員名單已清空');
+  }
+}
+
 function cmRender(){
   var slots = cmGetSlots();
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
