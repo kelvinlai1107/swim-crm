@@ -2390,15 +2390,21 @@ function cmRender(){
     '</div>';
 }
 function cmOpenAdd(){
+  cmOpenAddAt('二', '');
+}
+
+function cmOpenAddAt(day, time){
   document.getElementById('cm-edit-idx').value='';
   document.getElementById('cm-modal-title').textContent='新增班次';
-  ['cm-day','cm-time','cm-cls','cm-teacher','cm-cap'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el){ if(id==='cm-day') el.value='二'; else if(id==='cm-cls') el.value='A'; else if(id==='cm-cap') el.value='6'; else el.value=''; }
-  });
+  document.getElementById('cm-day').value = day || '二';
+  document.getElementById('cm-time').value = time || '';
+  document.getElementById('cm-cls').value = 'A';
+  document.getElementById('cm-teacher').value = '';
+  document.getElementById('cm-cap').value = '6';
   document.getElementById('cm-modal-err').style.display='none';
   document.getElementById('cm-delete-btn').style.display='none';
   document.getElementById('cm-modal').classList.add('open');
+  setTimeout(function(){ var el=document.getElementById(time?'cm-cls':'cm-time'); if(el) el.focus(); }, 100);
 }
 function cmOpenEdit(idx){
   var slots=cmGetSlots(), sl=slots[idx];
