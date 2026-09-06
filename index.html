@@ -1196,6 +1196,13 @@ function seasonInit(){
     if(saved && SLB[saved]) _curSeason = saved;
   }catch(e){}
 
+  // Persist S2 base to localStorage so copy function can always access it
+  try{
+    if(!localStorage.getItem('crm_slots_x_S2') && _baseSlotX && _baseSlotX.length)
+      localStorage.setItem('crm_slots_x_S2', JSON.stringify(_baseSlotX));
+    if(!localStorage.getItem('crm_slots_b_S2') && _baseSlotB && _baseSlotB.length)
+      localStorage.setItem('crm_slots_b_S2', JSON.stringify(_baseSlotB));
+  }catch(e){}
   // Load season data
   _loadSeasonData(_curSeason);
   _updateSeasonUI();
@@ -2261,8 +2268,20 @@ function cmExecuteCopy(){
   if(!copyX&&!copyB){alert('請至少選擇一個館別');return;}
 
   function getSrcSlots(s,hall){
-    if(s==='S2') return hall==='X'?(_baseSlotX?JSON.parse(JSON.stringify(_baseSlotX)):[]):(_baseSlotB?JSON.parse(JSON.stringify(_baseSlotB)):[]);
-    try{var saved=localStorage.getItem('crm_slots_'+(hall==='X'?'x':'b')+'_'+s); return saved?JSON.parse(saved):[];}catch(e){return [];}
+    // Try localStorage per-season key first
+    try{
+      var key='crm_slots_'+(hall==='X'?'x':'b')+'_'+s;
+      var saved=localStorage.getItem(key);
+      if(saved){var parsed=JSON.parse(saved); if(parsed.length>0) return parsed;}
+    }catch(e){}
+    // Fallback to in-memory base vars (S2 only)
+    if(s==='S2'){
+      var base = hall==='X' ? _baseSlotX : _baseSlotB;
+      if(base && base.length) return JSON.parse(JSON.stringify(base));
+      // Last resort: if we're currently on S2, use SLOTS_X/B directly
+      if(_curSeason==='S2') return JSON.parse(JSON.stringify(hall==='X'?SLOTS_X:SLOTS_B));
+    }
+    return [];
   }
   function clearStudents(slots){
     return JSON.parse(JSON.stringify(slots)).map(function(sl){
