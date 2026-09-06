@@ -1173,27 +1173,21 @@ function seasonInit(){
 
 function _loadSeasonData(s){
   try{
-    // S2 = HTML base data (or localStorage override)
-    var sx = localStorage.getItem('crm_slots_x_'+s);
-    var sb = localStorage.getItem('crm_slots_b_'+s);
+    var sx   = localStorage.getItem('crm_slots_x_'+s);
+    var sb   = localStorage.getItem('crm_slots_b_'+s);
     var seax = localStorage.getItem('crm_seat_x_'+s);
     var seab = localStorage.getItem('crm_seat_b_'+s);
-    if(s==='S2' && !sx && _baseSlotX){
-      SLOTS_X = JSON.parse(JSON.stringify(_baseSlotX));
-      SLOTS_B = JSON.parse(JSON.stringify(_baseSlotB));
-      SEAT_X  = JSON.parse(JSON.stringify(_baseSeatX));
-      SEAT_B  = JSON.parse(JSON.stringify(_baseSeatB));
+    if(s==='S2'){
+      SLOTS_X = sx   ? JSON.parse(sx)   : (_baseSlotX ? JSON.parse(JSON.stringify(_baseSlotX)) : []);
+      SLOTS_B = sb   ? JSON.parse(sb)   : (_baseSlotB ? JSON.parse(JSON.stringify(_baseSlotB)) : []);
+      SEAT_X  = seax ? JSON.parse(seax) : (_baseSeatX ? JSON.parse(JSON.stringify(_baseSeatX)) : []);
+      SEAT_B  = seab ? JSON.parse(seab) : (_baseSeatB ? JSON.parse(JSON.stringify(_baseSeatB)) : []);
     } else {
-      SLOTS_X = sx  ? JSON.parse(sx)  : (s==='S2'&&_baseSlotX ? JSON.parse(JSON.stringify(_baseSlotX)) : []);
-      SLOTS_B = sb  ? JSON.parse(sb)  : (s==='S2'&&_baseSlotB ? JSON.parse(JSON.stringify(_baseSlotB)) : []);
-      SEAT_X  = seax? JSON.parse(seax): (s==='S2'&&_baseSeatX ? JSON.parse(JSON.stringify(_baseSeatX)) : []);
-      SEAT_B  = seab? JSON.parse(seab): (s==='S2'&&_baseSeatB ? JSON.parse(JSON.stringify(_baseSeatB)) : []);
+      SLOTS_X = sx   ? JSON.parse(sx)   : [];
+      SLOTS_B = sb   ? JSON.parse(sb)   : [];
+      SEAT_X  = seax ? JSON.parse(seax) : [];
+      SEAT_B  = seab ? JSON.parse(seab) : [];
     }
-    // Also load any locally-saved overrides from cmSaveLocal
-    var lsx = localStorage.getItem('crm_slots_x_'+s+'_edit');
-    var lsb = localStorage.getItem('crm_slots_b_'+s+'_edit');
-    if(lsx) SLOTS_X = JSON.parse(lsx);
-    if(lsb) SLOTS_B = JSON.parse(lsb);
   }catch(e){ console.warn('Season load error:', e); }
 }
 
@@ -1228,19 +1222,22 @@ function seasonMenuToggle(){
 
 function seasonSwitch(s){
   if(s===_curSeason){ seasonMenuToggle(); return; }
-  // Save current season data
   _saveCurrentSeason();
-  // Switch
   _curSeason = s;
   try{ localStorage.setItem('crm_cur_season', s); }catch(e){}
   _loadSeasonData(s);
   _updateSeasonUI();
   seasonMenuToggle();
-  // Re-render current page
-  var pg = document.querySelector('.pg[style*="display: block"], .pg:not([style*="none"])');
-  if(typeof formalInit==='function') formalInit();
-  if(typeof cmInit==='function' && document.getElementById('pg-classmgmt') &&
-     document.getElementById('pg-classmgmt').style.display!=='none') cmInit();
+  // Re-render whichever page is currently visible
+  setTimeout(function(){
+    var active = '';
+    document.querySelectorAll('[id^="pg-"]').forEach(function(el){
+      if(el.style.display !== 'none') active = el.id.replace('pg-','');
+    });
+    if(active==='formal') formalInit();
+    else if(active==='classmgmt') cmInit();
+    else if(active==='renewal' && typeof RVinit==='function') RVinit();
+  }, 50);
 }
 
 // Close season menu when clicking outside
@@ -2204,12 +2201,6 @@ function cmSaveLocal(){
   }catch(e){}
 }
 function cmInit(){
-  try{
-    var sx=localStorage.getItem('crm_slots_x'); if(sx) SLOTS_X=JSON.parse(sx);
-    var sb=localStorage.getItem('crm_slots_b'); if(sb) SLOTS_B=JSON.parse(sb);
-    var seax=localStorage.getItem('crm_seat_x'); if(seax) SEAT_X=JSON.parse(seax);
-    var seab=localStorage.getItem('crm_seat_b'); if(seab) SEAT_B=JSON.parse(seab);
-  }catch(e){}
   cmRender();
 }
 function cmRender(){
@@ -2480,6 +2471,36 @@ function seatMove(hall, day, time, cls, teacher, order, name){
 
 
 
+
+// ── 續報作業 Tab 切換 ──────────────────────────────────────────────────────
+var _rvTab = 'upload';
+
+function RVinit(){
+  var btn = document.querySelector('[onclick*="RVtab(\''+_rvTab+'\'"]');
+  RVtab(_rvTab, btn);
+}
+
+function RVtab(tab, btn){
+  _rvTab = tab;
+  // Hide all known tab panels
+  ['wl','stu','heat','grid','dups','upload'].forEach(function(t){
+    var el = document.getElementById('rv-'+t);
+    if(el) el.style.display = 'none';
+  });
+  // Show target
+  var target = document.getElementById('rv-'+tab);
+  if(target) target.style.display = '';
+  // Update tab styles
+  document.querySelectorAll('.rv-tab').forEach(function(b){
+    b.classList.remove('active');
+  });
+  if(btn) btn.classList.add('active');
+  // Trigger render
+  if(tab==='wl'   && typeof RVbuildWL==='function') RVbuildWL();
+  if(tab==='heat' && typeof RVrenderHeat==='function') RVrenderHeat();
+  if(tab==='grid' && typeof RVrenderGrid==='function') RVrenderGrid();
+  if(tab==='dups' && typeof RVrenderDups==='function') RVrenderDups();
+}
 
 </script>
 </body>
