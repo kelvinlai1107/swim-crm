@@ -568,7 +568,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div id="pg-renewal" style="display:none">
   <div class="ph">
     <div class="pt">續報作業</div>
-    <span class="tag t-am" style="font-size:12px">2026 秋季班 S3</span>
+    <span class="tag t-am" style="font-size:12px" id="rv-season-tag">2026 秋季班 S3</span>
     <span style="font-size:12px;color:var(--tx3)">問卷截止：2026-08-31</span>
     <div class="ha"><button class="btn bs sm" onclick="alert('匯出Excel功能：正式版串接後可用')">匯出 Excel</button></div>
   </div>
@@ -724,8 +724,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div class="mo" id="m-add-pkg"><div class="md"><div class="mt2">新增/續購套票</div><div class="fr"><label class="flb">學員搜尋</label><input class="fi2" placeholder="輸入姓名或電話..."></div><div class="fgrid"><div class="fr"><label class="flb">套票類型</label><select class="fse"><option>套票A（3堂）</option><option>套票B（5堂）</option></select></div><div class="fr"><label class="flb">購買日期</label><input class="fi2" type="date"></div></div><div class="mf"><button class="btn bs sm" onclick="HM('add-pkg')">取消</button><button class="btn bp sm" onclick="HM('add-pkg')">建立套票</button></div></div></div>
 <div class="mo" id="m-edit-ncc"><div class="md" style="width:560px;max-width:95vw"><div class="mt2" id="en-title">NCC 編輯</div><div id="en-body"></div><div class="mf"><button class="btn bs sm" onclick="HM('edit-ncc')">取消</button><button class="btn bp sm" onclick="SN()">儲存</button></div></div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
-<script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"
 // ── Config ───────────────────────────────
 // ── Config ───────────────────────────────────────────────────────────────
 var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
@@ -1274,6 +1273,9 @@ function _saveCurrentSeason(){
 function _updateSeasonUI(){
   var pill = document.getElementById('season-pill');
   if(pill) pill.textContent = '2026 '+_curSeason+' '+SLB[_curSeason]+' ▾';
+  var rtag = document.getElementById('rv-season-tag');
+  if(rtag) rtag.textContent = '2026 '+SLB[_curSeason]+' '+_curSeason;
+
   // Update menu checkmarks
   document.querySelectorAll('.season-item').forEach(function(el){
     var s = el.dataset.season;
@@ -3007,379 +3009,393 @@ function RVtrialClearSlot(hall, slotIdx){
 
 // ── 更新問卷資料 ──────────────────────────────────────────────────────────
 // ── 班別候補名單 (rv-wl) ────────────────────────────────────────────────
-function RVrender(){
-  RVbuildWL();
-}
+// ── 班別候補名單 ──────────────────────────────────────────────────────────
+function RVrender(){ RVbuildWL(); }
 
 function RVbuildWL(){
-  var hallSel = document.getElementById('rv-hall');
-  var clsSel  = document.getElementById('rv-cls');
-  var listEl  = document.getElementById('rv-cls-list');
-  var detEl   = document.getElementById('rv-wl-pn');
+  var raw=RV_RAW||[];
+  var hallF=(document.getElementById('rv-hall')||{}).value||'';
+  var clsF=(document.getElementById('rv-cls')||{}).value||'';
+  var listEl=document.getElementById('rv-cls-list');
+  var detEl=document.getElementById('rv-wl-pn');
   if(!listEl) return;
-
-  var hall = hallSel ? hallSel.value : '';
-  var clsF = clsSel  ? clsSel.value  : '';
-
-  // Count change requests per class per hall
-  var counts = {}; // key: hall+cls → {names:[], keep:0, change:0, stop:0}
-  var raw = RV_RAW || [];
+  var counts={};
   raw.forEach(function(r){
-    if(hall && r.hall !== hall) return;
-    // For change requests, use cur_cls as source class
-    if(r.plan==='change' && r.cur_cls){
-      var key = r.hall+'|'+r.cur_cls;
-      if(!counts[key]) counts[key]={hall:r.hall,cls:r.cur_cls,names:[],keep:0,change:0,stop:0};
-      counts[key].change++;
-      counts[key].names.push(r.name);
-    } else if(r.plan==='keep' && r.cur_cls){
-      var key2 = r.hall+'|'+r.cur_cls;
-      if(!counts[key2]) counts[key2]={hall:r.hall,cls:r.cur_cls,names:[],keep:0,change:0,stop:0};
-      counts[key2].keep++;
-    } else if(r.plan==='stop' && r.cur_cls){
-      var key3 = r.hall+'|'+r.cur_cls;
-      if(!counts[key3]) counts[key3]={hall:r.hall,cls:r.cur_cls,names:[],keep:0,change:0,stop:0};
-      counts[key3].stop++;
-    }
+    if(r.plan!=='change') return;
+    if(hallF && r.hall!==hallF) return;
+    var seen={};
+    (r.wls||[]).forEach(function(wl){
+      if(hallF && wl.hall!==hallF) return;
+      var key=wl.hall+'|'+wl.cls;
+      if(!seen[key]){ seen[key]=true; if(!counts[key]) counts[key]={hall:wl.hall,cls:wl.cls,total:0}; counts[key].total++; }
+    });
   });
-
-  // Group by class
-  var clsGroups = {}; // cls → [{hall, cls, ...}]
-  Object.keys(counts).forEach(function(k){
-    var v = counts[k];
-    if(clsF && v.cls!==clsF) return;
-    if(!clsGroups[v.cls]) clsGroups[v.cls]=[];
-    clsGroups[v.cls].push(v);
+  var CLS_ORD=['A','B','C','D','E','F'];
+  var CLS_FULL={'A':'亲子A','B':'亲子B','C':'幼儿C','D':'幼儿D','E':'儿童E','F':'儿童F'};
+  var CLS_FULL2={'A':'\u89AA\u5B50A','B':'\u89AA\u5B50B','C':'\u5E7C\u5152C','D':'\u5E7C\u5152D','E':'\u5152\u7AE5E','F':'\u5152\u7AE5F'};
+  var CLS_COL={'A':'#E53935','B':'#E53935','C':'#BF8F00','D':'#BF8F00','E':'#388E3C','F':'#388E3C'};
+  var HALLS=['\u897F\u5C6C','\u5317\u5C6C'];
+  var listHTML='', firstItem=null;
+  var hallsToShow=hallF?[hallF]:HALLS;
+  hallsToShow.forEach(function(hall){
+    var hallTag=hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:10px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:10px">\u5317\u5C6C</span>';
+    CLS_ORD.forEach(function(cls){
+      if(clsF && CLS_FULL2[cls]!==clsF) return;
+      var key=hall+'|'+cls;
+      var cnt=counts[key]?counts[key].total:0;
+      if(!cnt) return;
+      var col=CLS_COL[cls];
+      var id='wl-'+hall+'-'+cls;
+      if(!firstItem) firstItem={hall:hall,cls:cls};
+      listHTML+='<div class="cls-item" id="'+id+'" onclick="RVshowWL(\''+hall+'\',\''+cls+'\')" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px">'
+        +hallTag+'<span style="width:26px;height:26px;border-radius:50%;background:'+col+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+cls+'</span>'
+        +'<span style="flex:1;font-size:13px">'+CLS_FULL2[cls]+'</span>'
+        +'<span style="font-size:12px;color:#E67E22;font-weight:700">'+cnt+'\u4EBA</span></div>';
+    });
   });
-
-  var CLS_ORD2 = ['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-  var CLS_COLORS = {'親子A':'#E53935','親子B':'#E53935','幼兒C':'#BF8F00','幼兒D':'#BF8F00','兒童E':'#388E3C','兒童F':'#388E3C'};
-
-  var listHTML = '';
-  CLS_ORD2.forEach(function(cls){
-    if(!clsGroups[cls]) return;
-    var total = 0;
-    clsGroups[cls].forEach(function(v){ total += v.change; });
-    if(!total && clsF !== cls) return;
-    var col = CLS_COLORS[cls] || '#666';
-    listHTML += '<div class="cls-item" onclick="RVshowWL(\''+cls+'\')" style="cursor:pointer;padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px">'
-      + '<span style="width:28px;height:28px;border-radius:50%;background:'+col+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">'+cls.slice(-1)+'</span>'
-      + '<span style="flex:1;font-size:13px">'+cls+'</span>'
-      + '<span style="font-size:12px;color:#E67E22;font-weight:600">換班 '+total+'</span>'
-      + '</div>';
-  });
-  listEl.innerHTML = listHTML || '<div style="padding:16px;color:var(--tx3);font-size:13px">暫無換班需求</div>';
-  detEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--tx3);font-size:13px">← 選擇左側班別查看候補名單</div>';
+  listEl.innerHTML=listHTML||'<div style="padding:16px;color:var(--tx3);font-size:13px">\u66AB\u7121\u63DB\u73ED\u9700\u6C42</div>';
+  if(firstItem) RVshowWL(firstItem.hall,firstItem.cls);
+  else detEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--tx3);font-size:13px">\u2190 \u9078\u64C7\u5DE6\u5074\u73ED\u5225\u67E5\u770B\u5019\u88DC\u540D\u55AE</div>';
 }
 
-function RVshowWL(cls){
-  var hallSel = document.getElementById('rv-hall');
-  var hall = hallSel ? hallSel.value : '';
-  var detEl = document.getElementById('rv-wl-pn');
-  var raw = (RV_RAW||[]).filter(function(r){
-    return r.plan==='change' && r.cur_cls===cls && (!hall||r.hall===hall);
+function RVshowWL(hall,cls){
+  var detEl=document.getElementById('rv-wl-pn'); if(!detEl) return;
+  document.querySelectorAll('.cls-item').forEach(function(el){el.style.background='';el.style.borderLeft='';});
+  var active=document.getElementById('wl-'+hall+'-'+cls);
+  if(active){active.style.background='var(--pr-bg)';active.style.borderLeft='3px solid var(--pr)';}
+  var CLS_FULL={A:'\u89AA\u5B50A',B:'\u89AA\u5B50B',C:'\u5E7C\u5152C',D:'\u5E7C\u5152D',E:'\u5152\u7AE5E',F:'\u5152\u7AE5F'};
+  var CLS_COL={A:'#E53935',B:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
+  var HALL_TAG=hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:11px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:11px">\u5317\u5C6C</span>';
+  var CLS_TAG='<span style="background:'+CLS_COL[cls]+';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">'+CLS_FULL[cls]+'</span>';
+  var BACKUP_LABEL={keep:'\u56DE\u539F\u73ED',teacher:'\u8ACB\u8001\u5E2B',stop:'\u4E0D\u518D\u5831'};
+  var BACKUP_COLOR={keep:'#388E3C',teacher:'#E67E22',stop:'#C0392B'};
+  var DAYS=['\u9031\u4E8C','\u9031\u4E09','\u9031\u56DB','\u9031\u4E94','\u9031\u516D'];
+  var raw=RV_RAW||[];
+  var timeGroups={};
+  raw.forEach(function(r){
+    if(r.plan!=='change') return;
+    (r.wls||[]).forEach(function(wl){
+      if(wl.hall!==hall||wl.cls!==cls) return;
+      var key=wl.day+'|'+wl.time;
+      if(!timeGroups[key]) timeGroups[key]={day:wl.day,time:wl.time,list:[]};
+      timeGroups[key].list.push({name:r.name,hall:r.hall,rank:wl.rank,backup:r.backup,submit:r.submit});
+    });
   });
-  if(!raw.length){
-    detEl.innerHTML='<div style="padding:16px;color:var(--tx3)">此班無換班申請</div>'; return;
-  }
-  var html='<div style="font-weight:600;font-size:13px;margin-bottom:12px">'+cls+' 換班候補 ('+raw.length+'人)</div>';
-  html+='<table style="width:100%;font-size:12px;border-collapse:collapse">'
-       +'<thead><tr style="border-bottom:1px solid var(--bd)">'
-       +'<th style="padding:4px 8px;text-align:left">學員</th>'
-       +'<th style="padding:4px 8px;text-align:left">館別</th>'
-       +'<th style="padding:4px 8px;text-align:left">填寫時間</th>'
-       +'</tr></thead><tbody>';
-  raw.forEach(function(r,i){
-    html+='<tr style="border-bottom:1px solid var(--bd);background:'+(i%2?'var(--sf)':'')+'"><td style="padding:6px 8px">'+r.name+'</td>'
-         +'<td style="padding:6px 8px">'+r.hall+'</td>'
-         +'<td style="padding:6px 8px;color:var(--tx3)">'+r.submit+'</td></tr>';
+  var total=Object.keys(timeGroups).reduce(function(acc,k){
+    var names={};
+    timeGroups[k].list.forEach(function(x){names[x.name]=true;});
+    return acc+Object.keys(names).length;
+  },0);
+  // Use unique person count
+  var uniqNames={};
+  raw.forEach(function(r){
+    if(r.plan!=='change') return;
+    (r.wls||[]).forEach(function(wl){
+      if(wl.hall===hall&&wl.cls===cls) uniqNames[r.name]=true;
+    });
   });
-  html+='</tbody></table>';
-  detEl.innerHTML=html;
+  var personCount=Object.keys(uniqNames).length;
+  if(!personCount){detEl.innerHTML='<div style="padding:16px;color:var(--tx3)">\u6B64\u73ED\u7121\u63DB\u73ED\u5019\u88DC</div>';return;}
+  var sortedKeys=Object.keys(timeGroups).sort(function(a,b){
+    var ga=timeGroups[a],gb=timeGroups[b];
+    var di=DAYS.indexOf(ga.day)-DAYS.indexOf(gb.day);
+    return di!==0?di:ga.time.localeCompare(gb.time);
+  });
+  var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+HALL_TAG+CLS_TAG
+    +'<span style="font-size:13px;color:var(--tx2)">\u5171 <b>'+personCount+'</b> \u4EBA\u5019\u88DC</span></div>'
+    +'<div style="overflow-y:auto;max-height:calc(100vh - 320px)">';
+  sortedKeys.forEach(function(key){
+    var grp=timeGroups[key];
+    grp.list.sort(function(a,b){return a.rank-b.rank;});
+    html+='<div style="background:var(--sf);border-radius:8px;margin-bottom:10px;overflow:hidden">'
+      +'<div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--tx);background:var(--bd);display:flex;align-items:center;gap:8px">'
+      +'<span>'+grp.day+' '+grp.time+'</span><span style="color:var(--tx3);font-weight:400">'+grp.list.length+' \u4EBA\u5019\u88DC</span></div>';
+    grp.list.forEach(function(item,i){
+      var hl=item.hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:9px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:9px">\u5317\u5C6C</span>';
+      var bu=item.backup?BACKUP_LABEL[item.backup]||item.backup:'';
+      var buColor=BACKUP_COLOR[item.backup]||'#999';
+      var dt=item.submit?item.submit.replace('2026-','').replace(/-/g,'/').replace(' ',' '):'';
+      html+='<div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px">'
+        +'<span style="width:20px;height:20px;border-radius:50%;background:var(--pr);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(i+1)+'</span>'
+        +'<span style="font-weight:600;font-size:13px;flex:1">'+item.name+'</span>'+hl
+        +'<span style="font-size:10px;color:var(--tx3)">\u7B2C '+item.rank+' \u5FD7\u9858</span>'
+        +(bu?'<span style="font-size:11px;font-weight:600;color:'+buColor+'">'+bu+'</span>':'')
+        +'<span style="font-size:11px;color:var(--tx3)">'+dt+'</span></div>';
+    });
+    html+='</div>';
+  });
+  detEl.innerHTML=html+'</div>';
 }
 
-// ── 學員志願總覽 (rv-stu) ────────────────────────────────────────────────
+// ── 學員志願總覽 ──────────────────────────────────────────────────────────
 function RVstuRender(){
-  var q    = (document.getElementById('rv-q')   || {}).value || '';
-  var plan = (document.getElementById('rv-plan') || {}).value || '';
-  var hall = (document.getElementById('rv-hall2')|| {}).value || '';
-  var tbody= document.getElementById('rv-stu-body');
-  if(!tbody) return;
-
-  var PLAN_LABEL={'keep':'原班續報','change':'換班續報','stop':'不續報','other':'未知'};
-  var PLAN_COLOR={'keep':'#388E3C','change':'#E67E22','stop':'#C0392B','other':'#999'};
-
+  var q=(document.getElementById('rv-q')||{}).value||'';
+  var plan=(document.getElementById('rv-plan')||{}).value||'';
+  var hall=(document.getElementById('rv-hall2')||{}).value||'';
+  var tbody=document.getElementById('rv-stu-body'); if(!tbody) return;
+  var PLAN_LABEL={keep:'\u539F\u73ED\u7E8C\u5831',change:'\u63DB\u73ED\u7E8C\u5831',stop:'\u4E0D\u7E8C\u5831',other:'\u672A\u77E5'};
+  var PLAN_STYLE={keep:'color:#388E3C',change:'color:#E67E22;font-weight:700',stop:'color:#C0392B',other:'color:#999'};
+  var CLS_FULL={A:'\u89AA\u5B50A',B:'\u89AA\u5B50B',C:'\u5E7C\u5152C',D:'\u5E7C\u5152D',E:'\u5152\u7AE5E',F:'\u5152\u7AE5F'};
+  var BACKUP_LABEL={keep:'\u56DE\u539F\u73ED',teacher:'\u8ACB\u8001\u5E2B',stop:'\u4E0D\u518D\u5831'};
+  var BACKUP_COLOR={keep:'#388E3C',teacher:'#E67E22',stop:'#C0392B'};
   var raw=(RV_RAW||[]).filter(function(r){
-    if(q && r.name.indexOf(q)<0) return false;
-    if(plan && r.plan!==plan) return false;
-    if(hall && r.hall!==hall) return false;
+    if(q&&r.name.indexOf(q)<0) return false;
+    if(plan&&r.plan!==plan) return false;
+    if(hall&&r.hall!==hall) return false;
     return true;
   });
-
-  if(!raw.length){ tbody.innerHTML='<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--tx3)">暫無資料</td></tr>'; return; }
-
+  if(!raw.length){tbody.innerHTML='<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--tx3)">\u66AB\u7121\u8CC7\u6599</td></tr>';return;}
   var html='';
   raw.forEach(function(r,i){
-    var col=PLAN_COLOR[r.plan]||'#999';
-    var lbl=PLAN_LABEL[r.plan]||r.plan;
-    html+='<tr style="border-bottom:1px solid var(--bd)">'
-         +'<td style="padding:6px 8px">'+(i+1)+'</td>'
-         +'<td style="padding:6px 8px;font-weight:600">'+r.name+'</td>'
-         +'<td style="padding:6px 8px">'+r.hall+'</td>'
-         +'<td style="padding:6px 8px">'+r.cur_cls+'</td>'
-         +'<td style="padding:6px 8px"><span style="color:'+col+';font-weight:600">'+lbl+'</span></td>'
-         +'<td style="padding:6px 8px;color:var(--tx3)">-</td>'
-         +'<td style="padding:6px 8px;color:var(--tx3)">-</td>'
-         +'<td style="padding:6px 8px;font-size:11px;color:var(--tx3)">'+r.submit+'</td>'
-         +'</tr>';
+    var hallTag=r.hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:10px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:10px">\u5317\u5C6C</span>';
+    var curClsFull=(CLS_FULL[r.cur_cls]||r.cur_cls)||'\u2014';
+    var wlSummary='\u2014';
+    if(r.wls&&r.wls.length){
+      wlSummary=r.wls.slice(0,3).map(function(wl,wi){
+        return '<span style="font-size:11px;background:#FFF3E0;color:#E67E22;padding:1px 5px;border-radius:3px;margin:1px;display:inline-block">'
+          +wl.hall+(CLS_FULL[wl.cls]||wl.cls)+' '+wl.day+' '+wl.time+'</span>';
+      }).join('');
+      if(r.wls.length>3) wlSummary+='<span style="font-size:11px;color:var(--tx3)"> +'+(r.wls.length-3)+'</span>';
+    }
+    var bu=r.backup?BACKUP_LABEL[r.backup]||r.backup:'';
+    var buColor=BACKUP_COLOR[r.backup]||'#999';
+    var dt=r.submit?r.submit.replace('2026-','').replace(/-/g,'/').split(' ')[0]:'';
+    html+='<tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 8px;color:var(--tx3)">'+(i+1)+'</td>'
+      +'<td style="padding:5px 8px;font-weight:600">'+r.name+'</td>'
+      +'<td style="padding:5px 8px">'+hallTag+'</td>'
+      +'<td style="padding:5px 8px">'+curClsFull+'</td>'
+      +'<td style="padding:5px 8px"><span style="'+PLAN_STYLE[r.plan]+'">'+PLAN_LABEL[r.plan]+'</span></td>'
+      +'<td style="padding:5px 8px">'+wlSummary+'</td>'
+      +'<td style="padding:5px 8px">'+(bu?'<span style="font-size:11px;font-weight:600;color:'+buColor+'">'+bu+'</span>':'\u2014')+'</td>'
+      +'<td style="padding:5px 8px;font-size:11px;color:var(--tx3)">'+dt+'</td></tr>';
   });
   tbody.innerHTML=html;
 }
 
-// ── 各班需求分析 (rv-heat) ───────────────────────────────────────────────
+// ── 各班需求分析 (bar chart) ──────────────────────────────────────────────
 function RVrenderHeat(){
-  var el=document.getElementById('rv-heat-body');
-  if(!el) return;
+  var el=document.getElementById('rv-heat-body'); if(!el) return;
   var raw=RV_RAW||[];
-  if(!raw.length){ el.innerHTML='<div style="padding:16px;color:var(--tx3)">請先上傳問卷資料</div>'; return; }
-
-  // Stats per hall per class
-  var halls=['西屯','北屯'];
-  var clsList=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-  var stats={}; // hall|cls → {keep,change,stop,total}
-  var hallTotals={}; // hall → {total,filled,keep,change,stop}
-  halls.forEach(function(h){
-    hallTotals[h]={total:0,filled:0,keep:0,change:0,stop:0};
-    clsList.forEach(function(c){ stats[h+'|'+c]={keep:0,change:0,stop:0,total:0}; });
-  });
-
-  // Get formal student counts per hall per class
-  var stuCount={}; // hall|cls → count from STU
-  (STU||[]).forEach(function(s){
-    if(s.id_!=='formal') return;
-    var key=s.hall+'|'+(s.type==='親子班'?(s.cls==='A'?'親子A':'親子B')
-      :s.type==='幼兒班'?(s.cls==='C'?'幼兒C':'幼兒D')
-      :(s.cls==='E'?'兒童E':'兒童F'));
-    // simpler: use cur_cls
-    var cls2=s.cur_cls;
-    var typeMap={'A':'親子A','B':'親子B','C':'幼兒C','D':'幼兒D','E':'兒童E','F':'兒童F'};
-    var fullCls=typeMap[cls2]||('班'+cls2);
-    var key2=s.hall+'|'+fullCls;
-    if(!stuCount[key2]) stuCount[key2]=0;
-    stuCount[key2]++;
-    var ht=hallTotals[s.hall];
-    if(ht) ht.total++;
-  });
-
-  raw.forEach(function(r){
-    var ht=hallTotals[r.hall];
-    if(!ht) return;
-    ht.filled++;
-    ht[r.plan]=(ht[r.plan]||0)+1;
-    var typeMap={'A':'親子A','B':'親子B','C':'幼兒C','D':'幼兒D','E':'兒童E','F':'兒童F'};
-    var fullCls=typeMap[r.cur_cls]||r.cur_cls;
-    var key=r.hall+'|'+fullCls;
-    if(stats[key]){
-      stats[key][r.plan]=(stats[key][r.plan]||0)+1;
-      stats[key].total++;
-    }
-  });
-
+  if(!raw.length){el.innerHTML='<div style="padding:16px;color:var(--tx3)">\u8ACB\u5148\u4E0A\u50B3\u554F\u5377\u8CC7\u6599</div>';return;}
+  var CLS_ORD=['A','B','C','D','E','F'];
+  var CLS_FULL={A:'\u89AA\u5B50A',B:'\u89AA\u5B50B',C:'\u5E7C\u5152C',D:'\u5E7C\u5152D',E:'\u5152\u7AE5E',F:'\u5152\u7AE5F'};
+  var CLS_COL={A:'#E53935',B:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
+  var HALLS=['\u897F\u5C6C','\u5317\u5C6C'];
   var html='';
-  halls.forEach(function(h){
-    var ht=hallTotals[h];
-    var rate=ht.total?Math.round(ht.filled/ht.total*100):0;
-    html+='<div style="margin-bottom:24px">'
-         +'<div style="font-weight:700;font-size:14px;margin-bottom:8px">'+h+'館 '
-         +'<span style="font-size:12px;font-weight:400;color:var(--tx3)">正式生 '+ht.total+' 人 | 已填 '+ht.filled+' 人 | 填表率 '+rate+'%</span>'
-         +'<span style="margin-left:8px;font-size:12px;color:#388E3C">原班 '+ht.keep+'</span>'
-         +' <span style="font-size:12px;color:#E67E22">換班 '+ht.change+'</span>'
-         +' <span style="font-size:12px;color:#C0392B">不續報 '+ht.stop+'</span>'
-         +'</div>'
-         +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-         +'<thead><tr style="border-bottom:1px solid var(--bd)">'
-         +'<th style="padding:4px 8px;text-align:left">班別</th>'
-         +'<th style="padding:4px 8px;text-align:center">現有人數</th>'
-         +'<th style="padding:4px 8px;text-align:center">原班</th>'
-         +'<th style="padding:4px 8px;text-align:center">換班</th>'
-         +'<th style="padding:4px 8px;text-align:center">不續報</th>'
-         +'<th style="padding:4px 8px;text-align:center">填表率</th>'
-         +'</tr></thead><tbody>';
-
-    clsList.forEach(function(cls,ci){
-      var st=stats[h+'|'+cls]||{keep:0,change:0,stop:0,total:0};
-      var stu=stuCount[h+'|'+cls]||0;
-      var r2=stu?Math.round(st.total/stu*100):0;
-      var bg=ci%2?'var(--sf)':'';
-      html+='<tr style="border-bottom:1px solid var(--bd);background:'+bg+'">'
-           +'<td style="padding:6px 8px;font-weight:600">'+cls+'</td>'
-           +'<td style="padding:6px 8px;text-align:center">'+stu+'</td>'
-           +'<td style="padding:6px 8px;text-align:center;color:#388E3C;font-weight:600">'+st.keep+'</td>'
-           +'<td style="padding:6px 8px;text-align:center;color:#E67E22;font-weight:600">'+st.change+'</td>'
-           +'<td style="padding:6px 8px;text-align:center;color:#C0392B;font-weight:600">'+st.stop+'</td>'
-           +'<td style="padding:6px 8px;text-align:center">'+r2+'%</td>'
-           +'</tr>';
+  HALLS.forEach(function(hall){
+    var hallRaw=raw.filter(function(r){return r.hall===hall;});
+    var keep=hallRaw.filter(function(r){return r.plan==='keep';}).length;
+    var change=hallRaw.filter(function(r){return r.plan==='change';}).length;
+    var stop=hallRaw.filter(function(r){return r.plan==='stop';}).length;
+    html+='<div style="margin-bottom:28px"><div style="font-weight:700;font-size:15px;margin-bottom:12px;border-bottom:2px solid var(--bd);padding-bottom:8px">'
+      +hall+'\u9928 \u2014 \u5404\u73ED\u6642\u6BB5\u5019\u88DC\u9700\u6C42'
+      +'<span style="margin-left:12px;font-size:12px;font-weight:400;color:var(--tx3)">\u56DE\u8986 '+hallRaw.length+' \u4EBA\uFF5C\u539F\u73ED '+keep+'\uFF5C\u63DB\u73ED '+change+'\uFF5C\u4E0D\u7E8C\u5831 '+stop+'</span></div>';
+    var shownAny=false;
+    CLS_ORD.forEach(function(cls){
+      var slotCounts={};
+      var clsChangers=0;
+      raw.forEach(function(r){
+        if(r.plan!=='change') return;
+        var seen={};
+        (r.wls||[]).forEach(function(wl){
+          if(wl.hall!==hall||wl.cls!==cls) return;
+          var key=wl.day+'|'+wl.time;
+          if(!seen[key]){seen[key]=true;slotCounts[key]=(slotCounts[key]||0)+1;clsChangers++;}
+        });
+      });
+      if(!clsChangers) return;
+      shownAny=true;
+      var sortedSlots=Object.keys(slotCounts).sort(function(a,b){return slotCounts[b]-slotCounts[a];});
+      var maxC=slotCounts[sortedSlots[0]]||1;
+      var col=CLS_COL[cls];
+      html+='<div style="margin-bottom:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        +'<span style="background:'+col+';color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700">'+CLS_FULL[cls]+'</span>'
+        +'<span style="font-size:12px;color:var(--tx3)">'+clsChangers+' \u4EBA\u5019\u88DC</span></div>';
+      sortedSlots.forEach(function(key){
+        var parts=key.split('|');
+        var cnt=slotCounts[key];
+        var barW=Math.round(cnt/maxC*100);
+        html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+          +'<span style="min-width:72px;font-size:12px;color:var(--tx2)">'+parts[0]+' '+parts[1]+'</span>'
+          +'<div style="flex:1;background:var(--bd);border-radius:4px;height:18px;overflow:hidden">'
+          +'<div style="height:100%;background:'+col+';width:'+barW+'%;border-radius:4px"></div></div>'
+          +'<span style="min-width:20px;text-align:right;font-size:12px;font-weight:600;color:'+col+'">'+cnt+'</span></div>';
+      });
+      html+='</div>';
     });
-    html+='</tbody></table></div>';
+    if(!shownAny) html+='<div style="color:var(--tx3);font-size:13px;padding:8px 0">\u6B64\u9928\u7121\u63DB\u73ED\u9700\u6C42</div>';
+    html+='</div>';
   });
   el.innerHTML=html;
 }
 
-// ── 課表候補視圖 (rv-grid) ───────────────────────────────────────────────
+// ── 課表候補視圖 ──────────────────────────────────────────────────────────
 function RVgrid(){
   var hallSel=document.getElementById('rv-grid-hall');
-  var clsSel =document.getElementById('rv-grid-cls');
+  var clsSel=document.getElementById('rv-grid-cls');
   var searchEl=document.getElementById('rv-grid-search');
-  var bodyEl  =document.getElementById('rv-grid-body');
-  if(!bodyEl) return;
-
-  var hall=hallSel?hallSel.value:'西屯';
-  var cls =clsSel ?clsSel.value :'親子A';
-  var q   =searchEl?searchEl.value.trim():'';
-
-  // Get slots for this hall+cls
-  var slots=(hall==='西屯'?SLOTS_X:SLOTS_B)||[];
-  var clsKey={'親子A':'A','親子B':'B','幼兒C':'C','幼兒D':'D','兒童E':'E','兒童F':'F'}[cls]||cls.slice(-1);
-
-  var relevant=slots.filter(function(sl){ return sl.cls===clsKey; });
-  if(!relevant.length){
-    bodyEl.innerHTML='<div style="padding:16px;color:var(--tx3);font-size:13px">此館別無此班別課程</div>'; return;
+  var bodyEl=document.getElementById('rv-grid-body'); if(!bodyEl) return;
+  var hall=hallSel?hallSel.value:'\u897F\u5C6C';
+  var clsFull=clsSel?clsSel.value:'\u89AA\u5B50A';
+  var cls=clsFull.slice(-1);
+  var q=searchEl?searchEl.value.trim():'';
+  var CLS_COL={A:'#E53935',B:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
+  var DAYS=['\u9031\u4E8C','\u9031\u4E09','\u9031\u56DB','\u9031\u4E94','\u9031\u516D'];
+  var BACKUP_LABEL={keep:'\u56DE\u539F',teacher:'\u8ACB\u5E2B',stop:'\u4E0D\u5831'};
+  var BACKUP_BG={keep:'#E8F5E9',teacher:'#FFF3E0',stop:'#FFEBEE'};
+  var BACKUP_COLOR={keep:'#388E3C',teacher:'#E67E22',stop:'#C0392B'};
+  var slotMap={};
+  (RV_RAW||[]).forEach(function(r){
+    if(r.plan!=='change') return;
+    if(q&&r.name.indexOf(q)<0) return;
+    (r.wls||[]).forEach(function(wl){
+      if(wl.hall!==hall||wl.cls!==cls) return;
+      var key=wl.day+'|'+wl.time;
+      if(!slotMap[key]) slotMap[key]=[];
+      slotMap[key].push({name:r.name,rank:wl.rank,backup:r.backup});
+    });
+  });
+  if(!Object.keys(slotMap).length){
+    bodyEl.innerHTML='<div style="padding:16px;color:var(--tx3);font-size:13px">'+(q?'\u641C\u5C0B\u7121\u7D50\u679C':'\u6B64\u9928\u6B64\u73ED\u7121\u5019\u88DC\u8CC7\u6599\uFF0C\u8ACB\u5148\u4E0A\u50B3\u554F\u5377')+'</div>'; return;
   }
-
-  // Get change requests for this hall+cls
-  var changers=(RV_RAW||[]).filter(function(r){
-    return r.plan==='change' && r.hall===hall;
-    // cur_cls might be bare letter or full name
-  });
-
-  var typeMap={'A':'親子A','B':'親子B','C':'幼兒C','D':'幼兒D','E':'兒童E','F':'兒童F'};
-
-  var html='<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;width:100%">'
-    +'<thead><tr style="border-bottom:2px solid var(--bd)">'
-    +'<th style="padding:6px 10px;text-align:left;min-width:100px">時段</th>'
-    +'<th style="padding:6px 10px;text-align:left">老師</th>'
-    +'<th style="padding:6px 10px;text-align:left;min-width:200px">現有學員</th>'
-    +'<th style="padding:6px 10px;text-align:left;min-width:200px">換班候補</th>'
-    +'</tr></thead><tbody>';
-
-  var DAYS=['週二','週三','週四','週五','週六'];
-  relevant.sort(function(a,b){
-    return DAYS.indexOf(a.day)-DAYS.indexOf(b.day)||a.time.localeCompare(b.time);
-  });
-
-  relevant.forEach(function(sl,i){
-    var stus=(sl.students||[]).filter(function(s){ return !s.empty; });
-    if(q){
-      var match=stus.some(function(s){ return s.name&&s.name.indexOf(q)>=0; });
-      if(!match) return;
-    }
-    var stuNames=stus.map(function(s){ return '<span style="display:inline-block;margin:1px 3px;padding:1px 5px;background:#EEF2FF;border-radius:3px">'+s.name+'</span>'; }).join('');
-    if(!stuNames) stuNames='<span style="color:var(--tx3)">（空班）</span>';
-
-    // Changers who want this specific timeslot - based on survey data (simplified: show all changers from same cls)
-    var wlNames=changers.filter(function(r){
-      var fc=typeMap[r.cur_cls]||r.cur_cls;
-      return fc===cls;
-    }).map(function(r){
-      return '<span style="display:inline-block;margin:1px 3px;padding:1px 5px;background:#FFF3E0;border-radius:3px;color:#E67E22">'+r.name+'</span>';
-    }).join('');
-    if(!wlNames) wlNames='<span style="color:var(--tx3)">-</span>';
-
-    var bg=i%2?'var(--sf)':'';
-    html+='<tr style="border-bottom:1px solid var(--bd);background:'+bg+'">'
-         +'<td style="padding:6px 10px;font-weight:600;white-space:nowrap">'+sl.day+' '+sl.time+'</td>'
-         +'<td style="padding:6px 10px">'+sl.teacher+'</td>'
-         +'<td style="padding:6px 10px">'+stuNames+'</td>'
-         +'<td style="padding:6px 10px">'+wlNames+'</td>'
-         +'</tr>';
+  var allTimes={},allDays={};
+  Object.keys(slotMap).forEach(function(key){var p=key.split('|');allDays[p[0]]=true;allTimes[p[1]]=true;});
+  var usedDays=DAYS.filter(function(d){return allDays[d];});
+  var usedTimes=Object.keys(allTimes).sort();
+  var col=CLS_COL[cls];
+  var html='<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;width:100%;min-width:500px">'
+    +'<thead><tr style="background:var(--sf);border-bottom:2px solid var(--bd)">'
+    +'<th style="padding:8px 12px;text-align:left;white-space:nowrap;color:var(--tx3)">\u6642\u6BB5</th>';
+  usedDays.forEach(function(d){html+='<th style="padding:8px 12px;text-align:center;font-weight:600">'+d+'</th>';});
+  html+='</tr></thead><tbody>';
+  usedTimes.forEach(function(time,ti){
+    html+='<tr style="border-bottom:1px solid var(--bd);background:'+(ti%2?'var(--sf)':'')+'"><td style="padding:8px 12px;font-weight:600;white-space:nowrap;color:var(--tx2)">'+time+'</td>';
+    usedDays.forEach(function(day){
+      var key=day+'|'+time;
+      var people=slotMap[key]||[];
+      people.sort(function(a,b){return a.rank-b.rank;});
+      if(!people.length){html+='<td style="padding:6px 8px"></td>';return;}
+      html+='<td style="padding:6px 8px;vertical-align:top">';
+      people.forEach(function(p,pi){
+        var bu=p.backup?BACKUP_LABEL[p.backup]||'':'';
+        var buBg=BACKUP_BG[p.backup]||'#f5f5f5';
+        var buCol=BACKUP_COLOR[p.backup]||'#666';
+        html+='<div style="display:inline-flex;align-items:center;gap:3px;margin:2px;padding:3px 7px;border:1.5px solid '+col+';border-radius:12px;background:#fff;white-space:nowrap">'
+          +'<span style="width:16px;height:16px;border-radius:50%;background:'+col+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(pi+1)+'</span>'
+          +'<span style="font-size:12px;font-weight:600">'+p.name+'</span>'
+          +'<span style="font-size:9px;color:'+col+'">\u5FD7'+p.rank+'</span>'
+          +(bu?'<span style="font-size:9px;font-weight:700;color:'+buCol+';background:'+buBg+';padding:1px 4px;border-radius:4px">'+bu+'</span>':'')
+          +'</div>';
+      });
+      html+='</td>';
+    });
+    html+='</tr>';
   });
   html+='</tbody></table></div>';
   bodyEl.innerHTML=html;
 }
 
 
+
 function RVhandleUpload(e){
   var file = e.target.files && e.target.files[0];
   if(!file) return;
   var status = document.getElementById('rv-upload-status');
-  if(status) status.innerHTML = "<div class='al al-am'>⏳ 解析中...</div>";
-
+  if(status) status.innerHTML = "<div class='al al-am'>\u23F3 \u89E3\u6790\u4E2D...</div>";
   var reader = new FileReader();
   reader.onload = function(ev){
     try{
       var wb = XLSX.read(ev.target.result, {type:'array'});
       var ws = wb.Sheets[wb.SheetNames[0]];
       var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      if(rows.length < 2){ throw new Error('檔案沒有資料'); }
-
-      // Find header row (row with 姓名 or 館別)
-      var hdrIdx = 0;
-      for(var i=0;i<Math.min(5,rows.length);i++){
-        if(rows[i].some(function(c){ return String(c).indexOf('姓名')>=0||String(c).indexOf('館別')>=0; })){
-          hdrIdx=i; break;
-        }
-      }
-      var hdr = rows[hdrIdx].map(function(c){ return String(c).trim(); });
-
-      // Map columns
-      function col(names){
+      if(rows.length < 2){ throw new Error('\u6A94\u6848\u6C92\u6709\u8CC7\u6599'); }
+      var hdr = rows[0].map(function(c){ return String(c||'').trim(); });
+      function cIdx(names){
         for(var i=0;i<hdr.length;i++){
           if(names.some(function(n){ return hdr[i].indexOf(n)>=0; })) return i;
         }
         return -1;
       }
-      var iName   = col(['姓名','學員']);
-      var iHall   = col(['館別','分館']);
-      var iPlan   = col(['續報','意願','選擇']);
-      var iCurCls = col(['目前班別','原班','現在班別']);
-      var iSubmit = col(['填寫時間','送出','提交']);
-
-      if(iName<0||iHall<0||iPlan<0){
-        throw new Error('找不到必要欄位（姓名/館別/續報意願），請確認 Excel 格式');
+      var iName   = cIdx(['\u5B78\u54E1\u59D3\u540D','\u59D3\u540D']);
+      var iHall   = cIdx(['\u5B78\u54E1\u9928\u5225','\u9928\u5225']);
+      var iPlan   = cIdx(['\u65B9\u6848\u9078\u64C7','\u65B9\u6848']);
+      var iCurCls = cIdx(['\u4F60\u76EE\u524D\u6B63\u5728\u4E0A\u8AB2\u7684\u8AB2\u7A0B\u985E\u5225','\u76EE\u524D\u73ED\u5225','\u8AB2\u7A0B\u985E\u5225']);
+      var iTarget = cIdx(['\u80FD\u529B\u5347\u7D1A\u8981\u63DB\u73ED']);
+      var iBackup = cIdx(['\u82E5\u4EE5\u4E0A\u6642\u6BB5\u7686\u672A\u5019\u88DC\u6210\u529F','\u5F8C\u5099']);
+      var iSubmit = cIdx(['\u586B\u7B54\u6642\u9593','\u586B\u5BEB\u6642\u9593','\u9001\u51FA']);
+      if(iName<0||iHall<0||iPlan<0){ throw new Error('\u627E\u4E0D\u5230\u5FC5\u8981\u6B04\u4F4D'); }
+      var wlCols=[];
+      hdr.forEach(function(h,idx){
+        var m=h.match(/([\u897F\u5317]\u5C6C\u9928)\u3010(.+?)\u73ED\u3011\u5019\u88DC\u9806\u5E8F/);
+        if(m){ wlCols.push({idx:idx, hall:m[1].replace('\u9928',''), cls:m[2].slice(-1), fullCls:m[2]}); }
+      });
+      function parseHall(s){ return s.indexOf('\u897F\u5C6C')>=0?'\u897F\u5C6C':s.indexOf('\u5317\u5C6C')>=0?'\u5317\u5C6C':s; }
+      function parsePlan(s){
+        if(s.indexOf('\u63DB\u73ED')>=0) return 'change';
+        if(s.indexOf('\u4F11\u606F')>=0||s.indexOf("won't")>=0) return 'stop';
+        return 'keep';
       }
-
-      var newRaw = [];
-      for(var r=hdrIdx+1;r<rows.length;r++){
-        var row = rows[r];
-        if(!row[iName]) continue;
-        var name = String(row[iName]).trim();
-        var hall = String(row[iHall]||'').trim();
-        var plan = String(row[iPlan]||'').trim();
-        var curCls = iCurCls>=0 ? String(row[iCurCls]||'').trim() : '';
-        var submit = iSubmit>=0 ? String(row[iSubmit]||'').trim() : '';
-
-        // Normalize plan
-        var planKey = 'other';
-        if(plan.indexOf('原班')>=0||plan.indexOf('續報')>=0&&plan.indexOf('換')< 0) planKey='keep';
-        else if(plan.indexOf('換班')>=0||plan.indexOf('換')>=0) planKey='change';
-        else if(plan.indexOf('不')>=0||plan.indexOf('停')>=0) planKey='stop';
-
-        newRaw.push({
-          name:name, hall:hall, plan:planKey,
-          cur_cls:curCls, submit:submit,
-          wls:[], payDone:false
+      function parseBackup(s){
+        if(!s) return '';
+        if(s.indexOf('\u539F\u6642\u6BB5')>=0) return 'keep';
+        if(s.indexOf('\u8001\u5E2B')>=0) return 'teacher';
+        if(s.indexOf('\u6C92\u8FA6\u6CD5')>=0) return 'stop';
+        return '';
+      }
+      function parseCurCls(grp,tgt){
+        if(tgt&&tgt.trim()){
+          var m2=tgt.match(/([A-F])/); if(m2) return m2[1];
+        }
+        if(grp.indexOf('\u89AA\u5B50')>=0) return 'A';
+        if(grp.indexOf('\u5E7C\u5152')>=0) return 'C';
+        if(grp.indexOf('\u5152\u7AE5')>=0) return 'E';
+        return '';
+      }
+      function parseWlText(txt){
+        var lines=String(txt||'').split('\n'), result=[];
+        lines.forEach(function(line){
+          var m3=line.trim().match(/^(\d+)[.\s]+\s*(\u9031[\u4E8C\u4E09\u56DB\u4E94\u516D])\s*(\d{1,2}[.:]\d{2})/);
+          if(m3){ var t=m3[3].replace('.',':'); if(t.length===4)t='0'+t; result.push({rank:parseInt(m3[1]),day:m3[2],time:t}); }
         });
+        return result;
       }
-
-      // Replace RV_RAW
-      RV_RAW = newRaw;
-      // Save to localStorage
-      try{ localStorage.setItem('crm_rv_raw_'+_curSeason, JSON.stringify(RV_RAW)); localStorage.setItem('crm_rv_raw', JSON.stringify(RV_RAW)); }catch(ex){}
-
-      if(status) status.innerHTML = "<div class='al al-ok'>✓ 已匯入 "+newRaw.length+" 筆問卷資料</div>";
-      // Re-render current tab
-      setTimeout(function(){
-        if(typeof RVbuildWL==='function') RVbuildWL();
-      }, 300);
-
+      var newRaw=[];
+      for(var r=1;r<rows.length;r++){
+        var row=rows[r];
+        if(!row[iName]) continue;
+        var name=String(row[iName]).trim(); if(!name) continue;
+        var hall=parseHall(String(row[iHall]||''));
+        var plan=parsePlan(String(row[iPlan]||''));
+        var grp=String(row[iCurCls]||'');
+        var tgt=iTarget>=0?String(row[iTarget]||''):'';
+        var backup=parseBackup(iBackup>=0?String(row[iBackup]||''):'');
+        var submit=iSubmit>=0?String(row[iSubmit]||''):'';
+        var curCls=parseCurCls(grp,tgt);
+        var wls=[];
+        wlCols.forEach(function(wc){
+          var raw_wl=String(row[wc.idx]||'').trim(); if(!raw_wl) return;
+          parseWlText(raw_wl).forEach(function(sl){
+            wls.push({hall:wc.hall,cls:wc.cls,fullCls:wc.fullCls,rank:sl.rank,day:sl.day,time:sl.time});
+          });
+        });
+        wls.sort(function(a,b){return a.rank-b.rank;});
+        newRaw.push({name:name,hall:hall,plan:plan,cur_cls:curCls,cur_group:grp,backup:backup,submit:submit,wls:wls,payDone:false});
+      }
+      RV_RAW=newRaw;
+      try{ localStorage.setItem('crm_rv_raw_'+_curSeason,JSON.stringify(RV_RAW)); localStorage.setItem('crm_rv_raw',JSON.stringify(RV_RAW)); }catch(ex){}
+      if(status) status.innerHTML="<div class='al al-ok'>\u2713 \u5DF2\u532F\u5165 "+newRaw.length+" \u7B46\u554F\u5377\u8CC7\u6599</div>";
+      RVinit();
     }catch(ex){
-      console.error('RVhandleUpload error:', ex);
-      if(status) status.innerHTML = "<div class='al al-rd'>✗ 解析失敗："+ex.message+"</div>";
+      console.error('RVhandleUpload error:',ex);
+      if(status) status.innerHTML="<div class='al al-rd'>\u2717 \u89E3\u6790\u5931\u6557\uFF1A"+ex.message+"</div>";
     }
   };
   reader.readAsArrayBuffer(file);
-  // Reset input so same file can be re-selected
-  e.target.value = '';
+  e.target.value='';
+}
+
+
+get.value = '';
 }
 
 </script>
