@@ -3937,12 +3937,29 @@ function RVtrialCtx(e, hall, slotIdx){
   document.addEventListener('click', function once(){ menu.remove(); _trialCtxMenu=null; document.removeEventListener('click',once); });
 }
 
+// 來源班次的唯一鍵：用學期＋館別＋星期＋時段＋班別＋老師代號組出來，
+// 不用陣列索引是因為索引在不同次開窗之間可能因為資料筆數變動而對不上
+function _trialSrcKey(season, hall, psl){
+  return season+'|'+hall+'|'+psl.day+'|'+psl.time+'|'+psl.cls+'|'+psl.teacher;
+}
+
 function RVtrialImport(hall, slotIdx){
   if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
   var slots = hall==='X' ? SLOTS_X : SLOTS_B;
   var sl = slots[slotIdx];
   if(!sl) return;
   _trialImportTarget = {hall:hall, slotIdx:slotIdx};
+
+  // 已經被帶去別的班（本季任何一個班次）的來源，不要再讓別班重複選——
+  // 但目前正在編輯的這個目標班次自己原本用的來源例外，還是要讓它看得到、
+  // 可以重新確認或改選
+  var usedKeys={};
+  [SLOTS_X, SLOTS_B].forEach(function(arr){
+    (arr||[]).forEach(function(s){
+      if(s===sl) return; // 目標自己例外
+      if(s._trialSourceKey) usedKeys[s._trialSourceKey]=true;
+    });
+  });
 
   // Load previous season slots
   var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
@@ -3977,12 +3994,15 @@ function RVtrialImport(hall, slotIdx){
       var prevSlots=getPrevSlots(s,h);
       prevSlots.forEach(function(psl){
         var filled=psl.students.filter(function(st){return !st.empty;}).length;
-        if(filled>0) allSrcSlots.push({season:s,hall:h,slot:psl,label:'['+SLB[s]+(h==='X'?'西屯':'北屯')+'] 週'+psl.day+' '+psl.time+' '+psl.cls+'班 '+psl.teacher+' ('+filled+'人)',grp:CLS_GRP[psl.cls]||'其他',cls:psl.cls});
+        if(filled<=0) return;
+        var key=_trialSrcKey(s,h,psl);
+        if(usedKeys[key]) return; // 已經帶去別班了，清單裡不再顯示
+        allSrcSlots.push({season:s,hall:h,slot:psl,key:key,label:'['+SLB[s]+(h==='X'?'西屯':'北屯')+'] 週'+psl.day+' '+psl.time+' '+psl.cls+'班 '+psl.teacher+' ('+filled+'人)',grp:CLS_GRP[psl.cls]||'其他',cls:psl.cls});
       });
     });
   });
 
-  if(!allSrcSlots.length){ alert('找不到其他學期的班次資料，請先確認其他學期有資料'); return; }
+  if(!allSrcSlots.length){ alert('找不到其他學期的班次資料，可能都已經帶入過了，或請先確認其他學期有資料'); return; }
 
   // Group by 親子/幼兒/兒童
   var GRPS=['親子','幼兒','兒童'];
@@ -4053,6 +4073,9 @@ function RVtrialDoImport(){
       target.students[i]._trial=undefined;
     }
   }
+  // 記下這個目標班次是用哪個來源帶進來的，下次開「帶入原班學員」清單時
+  // 才知道這個來源已經被用掉了，不要再讓別班重複選
+  target._trialSourceKey = src.key;
 
   cmSaveLocal();
   document.getElementById('rv-import-modal').classList.remove('open');
@@ -4066,6 +4089,7 @@ function RVtrialClearSlot(hall, slotIdx){
   var sl=slots[slotIdx];
   if(!sl||!confirm('確定清空 週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+' 的學員？')) return;
   sl.students.forEach(function(s){ s.name=''; s.empty=true; s._trial=undefined; });
+  sl._trialSourceKey = undefined; // 清空這班，原本帶入的來源就釋放回清單，可以再被別班選
   cmSaveLocal();
   RVtrialRender();
 }
