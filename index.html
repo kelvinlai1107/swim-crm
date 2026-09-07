@@ -1321,6 +1321,15 @@ document.addEventListener('click', function(e){
   if(menu && !menu.contains(e.target) && e.target!==pill){
     menu.style.display='none';
   }
+  // Renewal class list item click
+  var clsItem = e.target.closest('.cls-item');
+  if(clsItem && clsItem.dataset.cls){
+    _rvCls = clsItem.dataset.cls;
+    document.querySelectorAll('.cls-item').forEach(function(el){ el.classList.remove('active'); });
+    clsItem.classList.add('active');
+    RVwlPanel(_rvCls);
+    return;
+  }
 });
 
 // Override cmSaveLocal to also save per-season keys
@@ -2940,6 +2949,250 @@ function RVattachDupTooltips(){
   });
 }
 
+function RVtrialRender(){
+  var hall = (document.getElementById('rv-trial-hall')||{}).value || 'X';
+  var body = document.getElementById('rv-trial-body');
+  if(!body) return;
+
+  // Use NEXT season's slots (current season in _curSeason)
+  // The trial uses current season's SLOTS as the new layout
+  var slots = hall==='X' ? SLOTS_X : SLOTS_B;
+  if(!slots || !slots.length){
+    body.innerHTML='<div style="padding:32px;text-align:center;color:var(--tx3)">目前學期尚無班次，請先在班級管理建立課表</div>';
+    return;
+  }
+
+  var BG  = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
+  var FG  = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
+  var TBG = '#EEF2FF', TW=52, CW=80, HH=24, SH=20;
+  var DO  = {'二':0,'三':1,'四':2,'五':3,'六':4};
+  var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
+
+  var wdDaySet={}, saTimeSet={}, wdTimeSet={};
+  slots.forEach(function(sl){
+    if(sl.day==='六'){ saTimeSet[sl.time]=true; }
+    else { wdDaySet[sl.day]=true; wdTimeSet[sl.time]=true; }
+  });
+  var wdDays=['二','三','四','五'].filter(function(d){return wdDaySet[d];});
+  var hasSat=slots.some(function(sl){return sl.day==='六';});
+  var wdTimes=Object.keys(wdTimeSet).sort();
+  var saTimes=Object.keys(saTimeSet).sort();
+  var SUBCOLS=hall==='B'?3:2;
+
+  function getSlots(day,time){
+    return slots.filter(function(sl){return sl.day===day&&sl.time===time;})
+      .sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);});
+  }
+  function slotIdx(sl){ return slots.indexOf(sl); }
+
+  function slotCell(sl){
+    if(!sl) return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e0e0e0;background:#fafafa"></td>';
+    var idx=slotIdx(sl);
+    var bg=BG[sl.cls]||'#fff', fg=FG[sl.cls]||'#333';
+    var filled=sl.students.filter(function(s){return !s.empty;}).length;
+    var cap=sl.students.length;
+    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0">';
+    // Header: class badge + teacher + fill count + right-click hint
+    h+='<div oncontextmenu="RVtrialCtx(event,\''+hall+'\','+idx+')" style="background:'+bg+';height:'+HH+'px;display:flex;align-items:center;gap:4px;padding:0 6px;border-bottom:1px solid #ccc;cursor:context-menu">';
+    h+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+sl.cls+'</span>';
+    h+='<span style="font-size:11px;color:#444;font-weight:600">'+sl.teacher+'</span>';
+    h+='<span style="font-size:10px;color:#999;margin-left:auto">'+filled+'/'+cap+'</span>';
+    h+='</div>';
+    // Students
+    sl.students.forEach(function(s){
+      if(s.empty){
+        h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;color:#ddd;font-size:11px">—</div>';
+      } else {
+        var nameColor = s._trial==='keep'?'color:#C62828;font-weight:600' : s._trial==='new'?'color:#E65100;font-weight:600' : 'color:#333';
+        h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;font-size:11px;'+nameColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+'</div>';
+      }
+    });
+    h+='</td>';
+    return h;
+  }
+
+  function buildSection(days, times, isSat){
+    var nc=days.length*SUBCOLS;
+    var tableW=TW+nc*CW;
+    var t='<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;width:'+tableW+'px;min-width:'+tableW+'px">';
+    t+='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
+    for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
+    t+='</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
+    var sth=isSat?'':'position:sticky;left:0;z-index:20;';
+    t+='<th rowspan="2" style="'+sth+'width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
+    days.forEach(function(d){
+      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
+    });
+    t+='</tr><tr>';
+    for(var i=0;i<nc;i++) t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+    t+='</tr></thead><tbody>';
+    var pg=-1;
+    times.forEach(function(time){
+      var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
+      if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
+      pg=grp;
+      var ts=(isSat?'':'position:sticky;left:0;z-index:5;')+'width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;padding:2px;vertical-align:middle';
+      t+='<tr><td style="'+ts+'">'+time+'</td>';
+      days.forEach(function(d){
+        var ds=getSlots(d,time);
+        for(var si=0;si<SUBCOLS;si++) t+=slotCell(ds[si]||null);
+      });
+      t+='</tr>';
+    });
+    return t+'</tbody></table>';
+  }
+
+  var wdW=TW+wdDays.length*SUBCOLS*CW, saW=TW+SUBCOLS*CW;
+  var wdHTML=wdTimes.length?buildSection(wdDays,wdTimes,false):'';
+  var saHTML=(hasSat&&saTimes.length)?buildSection(['六'],saTimes,true):'';
+
+  body.innerHTML='<div style="display:flex;gap:6px;align-items:flex-start">'+
+    (wdHTML?'<div style="flex:0 0 '+wdW+'px;width:'+wdW+'px">'+wdHTML+'</div>':'')+
+    (saHTML?'<div style="flex:0 0 '+saW+'px;width:'+saW+'px">'+saHTML+'</div>':'')+
+    '</div>';
+}
+
+function RVtrialCtx(e, hall, slotIdx){
+  e.preventDefault();
+  if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
+  var menu=document.createElement('div');
+  menu.style.cssText='position:fixed;z-index:9999;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.15);padding:4px 0;font-size:13px;min-width:180px';
+  menu.style.left=Math.min(e.clientX,window.innerWidth-200)+'px';
+  menu.style.top=Math.min(e.clientY,window.innerHeight-120)+'px';
+  menu.innerHTML=
+    '<div style="padding:6px 14px;font-size:11px;color:#888;border-bottom:1px solid #eee">劃位試排操作</div>'+
+    '<div class="ctx-item" onclick="RVtrialImport(\''+hall+'\','+slotIdx+')">📋 帶入原班學員</div>'+
+    '<div class="ctx-item" onclick="RVtrialClearSlot(\''+hall+'\','+slotIdx+')">🗑 清空此班學員</div>';
+  document.body.appendChild(menu);
+  _trialCtxMenu=menu;
+  document.addEventListener('click', function once(){ menu.remove(); _trialCtxMenu=null; document.removeEventListener('click',once); });
+}
+
+function RVtrialImport(hall, slotIdx){
+  if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
+  var slots = hall==='X' ? SLOTS_X : SLOTS_B;
+  var sl = slots[slotIdx];
+  if(!sl) return;
+  _trialImportTarget = {hall:hall, slotIdx:slotIdx};
+
+  // Load previous season slots
+  var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
+  var seasons=['S1','S2','S3'].filter(function(s){return s!==_curSeason;});
+
+  // Build source slot list from all previous seasons
+  function getPrevSlots(s, h){
+    if(s==='S2'){
+      return h==='X'?(_baseSlotX?JSON.parse(JSON.stringify(_baseSlotX)):[]):(_baseSlotB?JSON.parse(JSON.stringify(_baseSlotB)):[]);
+    }
+    try{
+      var saved=localStorage.getItem('crm_slots_'+(h==='X'?'x':'b')+'_'+s);
+      return saved?JSON.parse(saved):[];
+    }catch(e){return [];}
+  }
+
+  // Collect all source slots with students
+  var CLS_GRP={N:'親子',A:'親子',B:'親子',C:'幼兒',D:'幼兒',E:'兒童',F:'兒童'};
+  var FG2={A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
+  var allSrcSlots=[];
+  seasons.forEach(function(s){
+    ['X','B'].forEach(function(h){
+      var prevSlots=getPrevSlots(s,h);
+      prevSlots.forEach(function(psl){
+        var filled=psl.students.filter(function(st){return !st.empty;}).length;
+        if(filled>0) allSrcSlots.push({season:s,hall:h,slot:psl,label:'['+SLB[s]+(h==='X'?'西屯':'北屯')+'] 週'+psl.day+' '+psl.time+' '+psl.cls+'班 '+psl.teacher+' ('+filled+'人)',grp:CLS_GRP[psl.cls]||'其他',cls:psl.cls});
+      });
+    });
+  });
+
+  if(!allSrcSlots.length){ alert('找不到其他學期的班次資料，請先確認其他學期有資料'); return; }
+
+  // Group by 親子/幼兒/兒童
+  var GRPS=['親子','幼兒','兒童'];
+  var byGrp={};
+  GRPS.forEach(function(g){byGrp[g]=[];});
+  allSrcSlots.forEach(function(item){ if(byGrp[item.grp]) byGrp[item.grp].push(item); });
+
+  var modal=document.getElementById('rv-import-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='rv-import-modal';
+    modal.className='mgmt-ov';
+    document.body.appendChild(modal);
+  }
+
+  var listHTML='';
+  GRPS.forEach(function(grp){
+    if(!byGrp[grp].length) return;
+    listHTML+='<div style="font-size:11px;font-weight:700;color:#888;padding:6px 0 3px;text-transform:uppercase">'+grp+'</div>';
+    byGrp[grp].forEach(function(item,i){
+      var key=item.season+'|'+item.hall+'|'+allSrcSlots.indexOf(item);
+      listHTML+='<label style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:13px">';
+      listHTML+='<input type="radio" name="rv-import-src" value="'+allSrcSlots.indexOf(item)+'">';
+      listHTML+='<span style="width:18px;height:18px;border-radius:50%;background:'+(FG2[item.cls]||'#999')+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+item.cls+'</span>';
+      listHTML+=item.label;
+      listHTML+='</label>';
+    });
+  });
+
+  modal.innerHTML='<div class="mgmt-pn" style="width:480px">'+
+    '<div class="mgmt-hd"><span style="font-size:15px;font-weight:700">帶入原班學員</span>'+
+    '<button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById(\'rv-import-modal\').classList.remove(\'open\')">×</button></div>'+
+    '<div class="mgmt-bd">'+
+    '<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">選擇來源班次，將該班學員帶入「<strong>週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+'</strong>」</div>'+
+    '<div style="max-height:360px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:8px 12px">'+listHTML+'</div></div>'+
+    '<div class="mgmt-ft">'+
+    '<button class="btn bs sm" onclick="document.getElementById(\'rv-import-modal\').classList.remove(\'open\')">取消</button>'+
+    '<button class="btn bp sm" onclick="RVtrialDoImport()">帶入學員</button></div></div>';
+  modal.classList.add('open');
+  // Store allSrcSlots for use in RVtrialDoImport
+  window._trialSrcSlots = allSrcSlots;
+}
+
+function RVtrialDoImport(){
+  var radio=document.querySelector('[name="rv-import-src"]:checked');
+  if(!radio){ alert('請選擇來源班次'); return; }
+  var srcIdx=parseInt(radio.value);
+  var src=window._trialSrcSlots[srcIdx];
+  if(!src||!_trialImportTarget) return;
+
+  var slots=_trialImportTarget.hall==='X'?SLOTS_X:SLOTS_B;
+  var target=slots[_trialImportTarget.slotIdx];
+  if(!target){ alert('目標班次找不到'); return; }
+
+  // Copy students from source to target, mark as _trial:'keep'
+  var srcStudents=src.slot.students.filter(function(s){return !s.empty;});
+  var cap=target.students.length;
+  // Reset target students
+  for(var i=0;i<cap;i++){
+    if(i<srcStudents.length){
+      target.students[i].name=srcStudents[i].name;
+      target.students[i].empty=false;
+      target.students[i].special=srcStudents[i].special||false;
+      target.students[i]._trial='keep';
+    } else {
+      target.students[i].name='';
+      target.students[i].empty=true;
+      target.students[i]._trial=undefined;
+    }
+  }
+
+  cmSaveLocal();
+  document.getElementById('rv-import-modal').classList.remove('open');
+  RVtrialRender();
+  alert('✓ 已帶入 '+srcStudents.length+' 位學員到 週'+target.day+' '+target.time+' '+target.cls+'班');
+}
+
+function RVtrialClearSlot(hall, slotIdx){
+  if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
+  var slots=hall==='X'?SLOTS_X:SLOTS_B;
+  var sl=slots[slotIdx];
+  if(!sl||!confirm('確定清空 週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+' 的學員？')) return;
+  sl.students.forEach(function(s){ s.name=''; s.empty=true; s._trial=undefined; });
+  cmSaveLocal();
+  RVtrialRender();
+}
+
+
 function RVhandleUpload(evt){
   var file=evt.target.files[0];
   if(!file) return;
@@ -3037,24 +3290,23 @@ function RVinit(){
 }
 
 function RVtab(name,el){
-  // Hide all sub-panels
-  ["wl","stu","heat","grid","dups","upload"].forEach(function(t){
-    var x=document.getElementById("rv-"+t);
-    if(x) x.style.display="none";
+  _rvTab = name;
+  ['wl','stu','heat','grid','dups','upload','trial'].forEach(function(t){
+    var x=document.getElementById('rv-'+t);
+    if(x) x.style.display='none';
   });
-  // Show target
-  var target=document.getElementById("rv-"+name);
-  if(target) target.style.display="";
-  // Update active tab
-  document.querySelectorAll("#rv-ptabs .ptab").forEach(function(t){t.classList.remove("active");});
-  if(el) el.classList.add("active");
-  // Render content
-  if(name==="wl")   RVrender();
-  if(name==="stu")  RVstuRender();
-  if(name==="heat") RVheat();
-  if(name==="grid") RVgrid();
-  if(name==="dups") RVrenderDups();
+  var target=document.getElementById('rv-'+name);
+  if(target) target.style.display='';
+  document.querySelectorAll('#rv-ptabs .ptab').forEach(function(t){t.classList.remove('active');});
+  if(el) el.classList.add('active');
+  if(name==='wl')    RVrender();
+  if(name==='stu')   RVstuRender();
+  if(name==='heat')  RVheat();
+  if(name==='grid')  RVgrid();
+  if(name==='dups')  RVrenderDups();
+  if(name==='trial') RVtrialRender();
 }
+
 
 function RVgetKeys(){
   var hall=document.getElementById("rv-hall").value;
