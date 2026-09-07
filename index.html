@@ -2471,6 +2471,7 @@ function formalVacancyRender(){
   var BG = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
   var FG = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
+  var DAY_SEP = '#6b7280'; // 每天之間的分隔線顏色，比一般格線 #ccc 深很多，明顯區隔開每一天
 
   var filterCls     = (document.getElementById('f-formal-cls')||{}).value||'';
   var filterTeacher = (document.getElementById('f-formal-teacher')||{}).value||'';
@@ -2555,12 +2556,21 @@ function formalVacancyRender(){
     t+='</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     var stickyTh=isSat?'':'position:sticky;left:0;z-index:20;';
     t+='<th rowspan="2" style="'+stickyTh+'width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    days.forEach(function(d){
+    days.forEach(function(d,di){
       var sc=subMap[d]||1;
-      t+='<th colspan="'+sc+'" style="width:'+(sc*CW)+'px;max-width:'+(sc*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:12px;font-weight:700;text-align:center;padding:5px 0">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
+      var dayBorder=di>0?';border-left:3px solid '+DAY_SEP:'';
+      t+='<th colspan="'+sc+'" style="width:'+(sc*CW)+'px;max-width:'+(sc*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:12px;font-weight:700;text-align:center;padding:5px 0'+dayBorder+'">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
     });
     t+='</tr><tr>';
-    for(var i=0;i<nc;i++) t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+    var ci2=0;
+    days.forEach(function(d,di){
+      var sc=subMap[d]||1;
+      for(var si=0;si<sc;si++){
+        var dayBorder=(di>0&&si===0)?';border-left:3px solid '+DAY_SEP:'';
+        t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0'+dayBorder+'">班別</th>';
+        ci2++;
+      }
+    });
     t+='</tr></thead><tbody>';
     var pg=-1;
     times.forEach(function(time){
@@ -2570,10 +2580,16 @@ function formalVacancyRender(){
       pg=grp;
       var tsStyle=(isSat?'':'position:sticky;left:0;z-index:5;')+'width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;padding:2px;vertical-align:middle';
       t+='<tr><td style="'+tsStyle+'">'+tFmt+'</td>';
-      days.forEach(function(d){
+      days.forEach(function(d,di){
         var ds=getSlots(d,time);
         var sc=subMap[d]||1;
-        for(var si=0;si<sc;si++) t+=(ds[si]?slotCell(ds[si]):emptyCell());
+        for(var si=0;si<sc;si++){
+          var cellStr=(ds[si]?slotCell(ds[si]):emptyCell());
+          // 加在 style 屬性「結尾」而不是開頭，這樣才不會被 cell 本身的
+          // border:1px solid ... 簡寫蓋掉（同一個 style 屬性內，後面的宣告贏）
+          if(di>0&&si===0) cellStr=cellStr.replace(/^(<td style="[^"]*)"/, '$1;border-left:3px solid '+DAY_SEP+'"');
+          t+=cellStr;
+        }
       });
       t+='</tr>';
     });
@@ -2906,6 +2922,7 @@ function formalGridRender(){
   var FG = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var TBG = '#EEF2FF';
   var TW=52, CW=76, RH=148, HH=22;
+  var DAY_SEP = '#6b7280'; // 每天之間的分隔線顏色，比一般格線 #ccc 深很多，明顯區隔開每一天
 
   var q             = (document.getElementById('q-formal').value||'').trim().toLowerCase();
   var filterCls     = (document.getElementById('f-formal-cls').value||'');
@@ -2981,11 +2998,17 @@ function formalGridRender(){
     for(var i=0;i<nc;i++) t += '<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t += '</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     t += '<th rowspan="2" style="position:sticky;left:0;z-index:20;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    wdDays.forEach(function(d){
-      t += '<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;max-width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
+    wdDays.forEach(function(d,di){
+      var dayBorder=di>0?';border-left:3px solid '+DAY_SEP:'';
+      t += '<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;max-width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0'+dayBorder+'">週'+d+'</th>';
     });
     t += '</tr><tr>';
-    for(var i=0;i<nc;i++) t += '<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+    wdDays.forEach(function(d,di){
+      for(var si=0;si<SUBCOLS;si++){
+        var dayBorder=(di>0&&si===0)?';border-left:3px solid '+DAY_SEP:'';
+        t += '<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0'+dayBorder+'">班別</th>';
+      }
+    });
     t += '</tr></thead><tbody>';
     var pg=-1;
     wdTimes.forEach(function(time){
@@ -2993,9 +3016,14 @@ function formalGridRender(){
       if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
       pg=grp;
       t += '<tr><td style="position:sticky;left:0;z-index:5;width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;vertical-align:middle;height:'+RH+'px;padding:0 2px">'+time+'</td>';
-      wdDays.forEach(function(d){
+      wdDays.forEach(function(d,di){
         var ds=getSlots(d,time);
-        for(var si=0;si<SUBCOLS;si++) t+=cellHTML(ds[si]||null,RH);
+        for(var si=0;si<SUBCOLS;si++){
+          var cellStr=cellHTML(ds[si]||null,RH);
+          // 加在 style 屬性結尾，避免被 cell 本身的 border:1px solid ... 簡寫蓋掉
+          if(di>0&&si===0) cellStr=cellStr.replace(/^(<td style="[^"]*)"/, '$1;border-left:3px solid '+DAY_SEP+'"');
+          t+=cellStr;
+        }
       });
       t += '</tr>';
     });
@@ -3239,6 +3267,7 @@ function cmRender(){
   var CC = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
   var FG = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var TBG='#EEF2FF', TW=52, CW=76;
+  var DAY_SEP = '#6b7280'; // 每天之間的分隔線顏色，比一般格線 #ccc 深很多，明顯區隔開每一天
 
   var cnt=document.getElementById('classmgmt-count');
   if(cnt) cnt.textContent='共 '+slots.length+' 個班次（'+(_cmHall==='X'?'西屯':'北屯')+'館）';
@@ -3305,11 +3334,17 @@ function cmRender(){
     for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
     t+='</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     t+='<th rowspan="2" style="position:sticky;left:0;z-index:20;width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    days.forEach(function(d){
-      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;max-width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+'</th>';
+    days.forEach(function(d,di){
+      var dayBorder=di>0?';border-left:3px solid '+DAY_SEP:'';
+      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;max-width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0'+dayBorder+'">週'+d+'</th>';
     });
     t+='</tr><tr>';
-    for(var i=0;i<nc;i++) t+='<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+    days.forEach(function(d,di){
+      for(var si=0;si<SUBCOLS;si++){
+        var dayBorder=(di>0&&si===0)?';border-left:3px solid '+DAY_SEP:'';
+        t+='<th style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0'+dayBorder+'">班別</th>';
+      }
+    });
     t+='</tr></thead><tbody>';
     var pg=-1;
     times.forEach(function(time){
@@ -3317,7 +3352,7 @@ function cmRender(){
       if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
       pg=grp;
       t+='<tr><td style="position:sticky;left:0;z-index:5;width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;vertical-align:middle;padding:0 2px">'+time+'</td>';
-      days.forEach(function(d){
+      days.forEach(function(d,di){
         var ds=getSlots(d,time);
         for(var si=0;si<SUBCOLS;si++){
           // Find slot at this col position
@@ -3331,7 +3366,10 @@ function cmRender(){
             // fallback: no col fields yet, use array index
             slAtCol = ds[si] || null;
           }
-          t+=cellHTML(slAtCol, d, time, si);
+          var cellStr=cellHTML(slAtCol, d, time, si);
+          // 加在 style 屬性結尾，避免被 cell 本身的 border:1px solid ... 簡寫蓋掉
+          if(di>0&&si===0) cellStr=cellStr.replace(/^(<td style="[^"]*)"/, '$1;border-left:3px solid '+DAY_SEP+'"');
+          t+=cellStr;
         }
       });
       t+='</tr>';
@@ -3818,6 +3856,7 @@ function RVtrialRender(){
   var TBG = '#EEF2FF', TW=52, CW=80, HH=24, SH=20;
   var DO  = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
+  var DAY_SEP = '#6b7280'; // 每天之間的分隔線顏色，比一般格線 #ccc 深很多，明顯區隔開每一天
 
   var wdDaySet={}, saTimeSet={}, wdTimeSet={};
   slots.forEach(function(sl){
@@ -3878,11 +3917,17 @@ function RVtrialRender(){
     t+='</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     var sth=isSat?'':'position:sticky;left:0;z-index:20;';
     t+='<th rowspan="2" style="'+sth+'width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    days.forEach(function(d){
-      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
+    days.forEach(function(d,di){
+      var dayBorder=di>0?';border-left:3px solid '+DAY_SEP:'';
+      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0'+dayBorder+'">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
     });
     t+='</tr><tr>';
-    for(var i=0;i<nc;i++) t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
+    days.forEach(function(d,di){
+      for(var si=0;si<SUBCOLS;si++){
+        var dayBorder=(di>0&&si===0)?';border-left:3px solid '+DAY_SEP:'';
+        t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0'+dayBorder+'">班別</th>';
+      }
+    });
     t+='</tr></thead><tbody>';
     var pg=-1;
     times.forEach(function(time){
@@ -3891,7 +3936,7 @@ function RVtrialRender(){
       pg=grp;
       var ts=(isSat?'':'position:sticky;left:0;z-index:5;')+'width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;padding:2px;vertical-align:middle';
       t+='<tr><td style="'+ts+'">'+time+'</td>';
-      days.forEach(function(d){
+      days.forEach(function(d,di){
         var ds=getSlots(d,time);
         for(var si=0;si<SUBCOLS;si++){
           // 跟 cmRender 的 cellHTML 同一套邏輯：col 有效就照 col 對到左右欄，
@@ -3903,7 +3948,10 @@ function RVtrialRender(){
           } else {
             slAtCol = ds[si] || null;
           }
-          t+=slotCell(slAtCol);
+          var cellStr=slotCell(slAtCol);
+          // 加在 style 屬性結尾，避免被 cell 本身的 border:1px solid ... 簡寫蓋掉
+          if(di>0&&si===0) cellStr=cellStr.replace(/^(<td style="[^"]*)"/, '$1;border-left:3px solid '+DAY_SEP+'"');
+          t+=cellStr;
         }
       });
       t+='</tr>';
@@ -4019,9 +4067,16 @@ function RVtrialImport(hall, slotIdx){
   }
 
   var listHTML='';
-  GRPS.forEach(function(grp){
+  var tabHTML='';
+  GRPS.forEach(function(grp,gi){
     if(!byGrp[grp].length) return;
-    listHTML+='<div style="font-size:11px;font-weight:700;color:#888;padding:6px 0 3px;text-transform:uppercase">'+grp+'</div>';
+    // 分類 tab：點了就跳到清單裡對應的分類，不用自己滑很久找
+    tabHTML+='<div class="ptab'+(gi===0?' active':'')+'" onclick="'+
+      'document.querySelectorAll(\'#rv-import-tabs .ptab\').forEach(function(t){t.classList.remove(\'active\')});'+
+      'this.classList.add(\'active\');'+
+      'var el=document.getElementById(\'rv-import-grp-'+grp+'\'); if(el) el.scrollIntoView({block:\'start\'});'+
+      '">'+grp+'</div>';
+    listHTML+='<div id="rv-import-grp-'+grp+'" style="font-size:11px;font-weight:700;color:#888;padding:6px 0 3px;text-transform:uppercase;scroll-margin-top:4px">'+grp+'</div>';
     byGrp[grp].forEach(function(item,i){
       var key=item.season+'|'+item.hall+'|'+allSrcSlots.indexOf(item);
       listHTML+='<label style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:13px">';
@@ -4037,6 +4092,7 @@ function RVtrialImport(hall, slotIdx){
     '<button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById(\'rv-import-modal\').classList.remove(\'open\')">×</button></div>'+
     '<div class="mgmt-bd">'+
     '<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">選擇來源班次，將該班學員帶入「<strong>週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+'</strong>」</div>'+
+    (tabHTML?'<div id="rv-import-tabs" class="ptabs" style="margin-bottom:8px">'+tabHTML+'</div>':'')+
     '<div style="max-height:360px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:8px 12px">'+listHTML+'</div></div>'+
     '<div class="mgmt-ft">'+
     '<button class="btn bs sm" onclick="document.getElementById(\'rv-import-modal\').classList.remove(\'open\')">取消</button>'+
