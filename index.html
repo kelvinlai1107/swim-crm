@@ -442,6 +442,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     </div>
     <div class="mgmt-bd" style="display:flex;flex-direction:column;gap:12px">
       <input type="hidden" id="cm-edit-idx">
+      <input type="hidden" id="cm-target-col">
       <label style="font-size:13px;font-weight:500">星期
         <select class="fs" id="cm-day" style="width:100%;margin-top:4px">
           <option value="二">週二</option><option value="三">週三</option>
@@ -3275,7 +3276,7 @@ function cmRender(){
         'ondragover="event.preventDefault();this.style.background=\'#E3F2FD\';" '+
         'ondragleave="this.style.background=\'#f9f9f9\'" '+
         'ondrop="cmDrop(event,\''+day+'\',\''+time+'\','+colIdx+');this.style.background=\'#f9f9f9\'" '+
-        'onclick="cmOpenAddAt(\''+day+'\',\''+time+'\')">'+
+        'onclick="cmOpenAddAt(\''+day+'\',\''+time+'\','+colIdx+')">'+
         '<span style="color:#ccc;font-size:18px;line-height:1">＋</span></td>';
     }
     var idx=findIdx(sl);
@@ -3347,8 +3348,9 @@ function cmOpenAdd(){
   cmOpenAddAt('二', '');
 }
 
-function cmOpenAddAt(day, time){
+function cmOpenAddAt(day, time, colIdx){
   document.getElementById('cm-edit-idx').value='';
+  document.getElementById('cm-target-col').value = (colIdx===undefined||colIdx===null||isNaN(colIdx)) ? '' : colIdx;
   document.getElementById('cm-modal-title').textContent='新增班次';
   document.getElementById('cm-day').value = day || '二';
   document.getElementById('cm-time').value = time || '';
@@ -3406,7 +3408,16 @@ function cmSave(){
     }
     var students=[];
     for(var i=1;i<=cap;i++) students.push({order:i,name:'',special:false,upgrade:'',empty:true});
-    slots.push({day:day,time:time,cls:cls,teacher:teacher,students:students});
+    var newSlot={day:day,time:time,cls:cls,teacher:teacher,students:students};
+    // 若是從某個空格的「+」點進來的，記得使用者點的是哪一欄，存的時候就放回同一欄，
+    // 而不是每次都被 _ensureSlotCols 重新排到最左邊
+    var targetColRaw = document.getElementById('cm-target-col').value;
+    if(targetColRaw!==''){
+      var targetCol = parseInt(targetColRaw);
+      var colTaken = slots.some(function(s){ return s.day===day && s.time===time && s.col===targetCol; });
+      if(!isNaN(targetCol) && targetCol>=0 && !colTaken) newSlot.col = targetCol;
+    }
+    slots.push(newSlot);
   }
   cmSetSlots(slots);
   document.getElementById('cm-modal').classList.remove('open');
