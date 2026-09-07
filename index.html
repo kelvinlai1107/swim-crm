@@ -3437,6 +3437,87 @@ function RVheat(){
   document.getElementById("rv-heat-body").innerHTML=html;
 }
 
+
+function buildPerson(p, idx, showCls){
+  // Card colors by fill-order rank
+  function rankBg(i){ return i===0?"#0F7560":i===1?"#1A5FBA":i===2?"#9B6200":"#9E9D97"; }
+  function cardBg(i){ return i===0?"#E8F5F2":i===1?"#EAF1FB":i===2?"#FEF3DC":"var(--sf2)"; }
+  function cardBd(i){ return i===0?"2px solid #0F7560":i===1?"1.5px solid #1A5FBA":i===2?"1.5px solid #9B6200":"1px solid var(--bd)"; }
+  // Chip color by slot_rank (this person's preference for this specific slot)
+  function chipColor(r){ return r===1?"var(--tl)":r===2?"var(--bl)":r===3?"var(--am)":"var(--tx3)"; }
+  function chipBg(r){    return r===1?"var(--tl-bg)":r===2?"var(--bl-bg)":r===3?"var(--am-bg)":"var(--gy)"; }
+
+  var allSlotsStr = p.slots_all.map(function(s){ return "志"+s.rank+"."+s.slot; }).join("|");
+  var crossHall   = p.home !== p.hall_label;
+
+  var html = "<div class='rv-cell-person'";
+  html += " style='background:"+cardBg(idx)+";border:"+cardBd(idx)+"'";
+  html += " data-name='"+p.name+"'";
+  html += " data-slotrank='"+p.slot_rank+"'";
+  html += " data-submit='"+p.submit.slice(0,16)+"'";
+  html += " data-allslots='"+allSlotsStr+"'";
+  html += " data-fallback='"+p.fallback+"'";
+  html += " data-home='"+p.home+"'";
+  html += " data-cls='"+p.cls_label+"'>";
+
+  // Rank circle
+  html += "<div class='rv-rank-badge' style='background:"+rankBg(idx)+"'>"+( idx+1)+"</div>";
+
+  // Name + 志X chip inline, single row
+  html += "<div style='display:flex;align-items:center;gap:3px;flex:1;min-width:0;overflow:hidden'>";
+  html += "<span style='font-size:11px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>"+p.name+"</span>";
+  // 志X chip (only show THIS slot's preference rank)
+  html += "<span style='flex-shrink:0;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:"+chipBg(p.slot_rank)+";color:"+chipColor(p.slot_rank)+"'>志"+p.slot_rank+"</span>";
+  // Cross-hall badge
+  if(crossHall){
+    html += "<span style='flex-shrink:0;font-size:9px;background:var(--pu-bg);color:var(--pu);padding:0 3px;border-radius:3px'>"+p.home+"</span>";
+  }
+  // In search mode, show class label
+  if(showCls){
+    html += "<span style='flex-shrink:0;font-size:9px;background:var(--am-bg);color:var(--am);padding:0 3px;border-radius:3px'>"+p.hall_label+p.cls_label+"</span>";
+  }
+  html += "</div></div>";
+  return html;
+}
+
+function attachGridTooltips(){
+  document.querySelectorAll(".rv-cell-person").forEach(function(el){
+    el.addEventListener("mouseenter", function(){
+      var tip = document.getElementById("rv-grid-tip");
+      if(!tip) return;
+      var sr = parseInt(el.dataset.slotrank)||1;
+      function pc(r){ return r===1?"var(--tl)":r===2?"var(--bl)":r===3?"var(--am)":"var(--tx3)"; }
+      var th = "<div style='font-weight:700;font-size:13px;margin-bottom:5px'>"+el.dataset.name+"</div>";
+      th += "<div style='font-size:11px;color:var(--tx3);margin-bottom:7px'>"+el.dataset.home+"館";
+      if(el.dataset.cls) th += " · "+el.dataset.cls;
+      th += " · 本格 <span style='color:"+pc(sr)+";font-weight:700'>志"+sr+"</span></div>";
+      th += "<div style='font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:3px'>所有志願時段</div>";
+      (el.dataset.allslots||"").split("|").forEach(function(s){
+        if(!s) return;
+        var dot=s.indexOf(".");
+        var label=s.slice(0,dot), slotTxt=s.slice(dot+1).trim();
+        var rankNum=parseInt(label.replace("志",""))||1;
+        th += "<div style='padding:2px 0;font-size:12px'>";
+        th += "<span style='color:"+pc(rankNum)+";font-weight:700;margin-right:5px'>"+label+"</span>";
+        th += "<span style='color:var(--tx2)'>"+slotTxt+"</span></div>";
+      });
+      th += "<div style='margin-top:8px;padding-top:7px;border-top:1px solid var(--bd);font-size:11px;color:var(--tx3)'>填單："+el.dataset.submit+"</div>";
+      if(el.dataset.fallback) th += "<div style='font-size:11px;color:var(--tx3)'>後備："+el.dataset.fallback+"</div>";
+      tip.innerHTML = th;
+      tip.style.display = "block";
+      var rect = el.getBoundingClientRect();
+      var left = rect.right+10;
+      if(left+270>window.innerWidth) left=rect.left-280;
+      tip.style.left = left+"px";
+      tip.style.top  = Math.min(rect.top, window.innerHeight-320)+"px";
+    });
+    el.addEventListener("mouseleave", function(){
+      var tip=document.getElementById("rv-grid-tip");
+      if(tip) tip.style.display="none";
+    });
+  });
+}
+
 function RVgrid(){
   var hall    = document.getElementById("rv-grid-hall").value;
   var cls     = document.getElementById("rv-grid-cls").value;
