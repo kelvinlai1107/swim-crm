@@ -1198,13 +1198,19 @@ var _baseSeatX = null;
 var _baseSeatB = null;
 
 function _ensureSlotCols(slots){
-  // 依 day+time 分組，一律重新編號成連續的 0..n-1（不是只補 col===undefined 的）。
-  // 舊版只補「從沒設定過」的欄位：只要同一個 day+time 曾經因為任何原因（拖曳、
-  // 複製課表、重複點「+」新增等）疊到超過畫面欄數（西屯2欄/北屯3欄），多出來的
-  // 班次會拿到超出範圍的 col 值，格子上永遠排不進去、也顯示不出來——使用者會覺得
-  // 這個班次「消失了」，其實資料還在，只是變成 UI 找不到的孤兒列。
-  // 這裡改成每次都依現有 col（沒有的視為最後）排序後，整組重新編號，確保 col 永遠
-  // 是連續、不重複、從 0 開始，讓 cmRender() 的動態 SUBCOLS 一定能把每一列都排出來。
+  // 依 day+time 分組。只有在這組的 col 真的有問題時（沒設定過、負數、非整數、
+  // 或跟同組別人重複）才重新編號成連續的 0..n-1；只要現有 col 都是合法且彼此
+  // 不重複的值，就完全不動它，保留使用者刻意排的欄位（例如同一時段只有一筆
+  // 班次、但故意排在右邊那格、左邊留空）。
+  //
+  // 這裡曾經改成「每次都無條件重新編號」，結果同一時段只有一筆班次時，重新編號
+  // 會把它從使用者剛拖到的 col=1 強制拉回 col=0（因為它是這組唯一一筆、重新編號
+  // 一定是從 0 開始算），造成「拖到右邊格子又跳回左邊、看起來完全拖不動」的
+  // 新 bug。改回「只有真的壞掉才修」之後，拖曳搬到哪個欄位就會留在那個欄位。
+  //
+  // 「同一 day+time 塞進比畫面欄數還多的班次」造成的舊 bug，改由 cmRender() 用
+  // 動態 SUBCOLS（欄數 = max(設計欄數, 該時段實際筆數)）處理，只要 col 彼此不
+  // 重複，不需要靠這裡硬重新編號也能保證每一筆都排得出來、看得到。
   var groups={};
   slots.forEach(function(sl){
     var key=sl.day+'|'+sl.time;
@@ -1212,11 +1218,19 @@ function _ensureSlotCols(slots){
     groups[key].push(sl);
   });
   Object.keys(groups).forEach(function(k){
-    groups[k].sort(function(a,b){
+    var g = groups[k];
+    var seen = {}, valid = true;
+    for (var j=0;j<g.length;j++){
+      var c = g[j].col;
+      if (c===undefined || c===null || c<0 || !Number.isInteger(c) || seen[c]){ valid=false; break; }
+      seen[c]=true;
+    }
+    if (valid) return; // 現有安排沒問題，不要動它
+    g.sort(function(a,b){
       var ca=a.col!==undefined?a.col:999, cb=b.col!==undefined?b.col:999;
       return ca-cb;
     });
-    groups[k].forEach(function(sl,i){ sl.col=i; });
+    g.forEach(function(sl,i){ sl.col=i; });
   });
 }
 
@@ -1919,13 +1933,19 @@ var _baseSeatX = null;
 var _baseSeatB = null;
 
 function _ensureSlotCols(slots){
-  // 依 day+time 分組，一律重新編號成連續的 0..n-1（不是只補 col===undefined 的）。
-  // 舊版只補「從沒設定過」的欄位：只要同一個 day+time 曾經因為任何原因（拖曳、
-  // 複製課表、重複點「+」新增等）疊到超過畫面欄數（西屯2欄/北屯3欄），多出來的
-  // 班次會拿到超出範圍的 col 值，格子上永遠排不進去、也顯示不出來——使用者會覺得
-  // 這個班次「消失了」，其實資料還在，只是變成 UI 找不到的孤兒列。
-  // 這裡改成每次都依現有 col（沒有的視為最後）排序後，整組重新編號，確保 col 永遠
-  // 是連續、不重複、從 0 開始，讓 cmRender() 的動態 SUBCOLS 一定能把每一列都排出來。
+  // 依 day+time 分組。只有在這組的 col 真的有問題時（沒設定過、負數、非整數、
+  // 或跟同組別人重複）才重新編號成連續的 0..n-1；只要現有 col 都是合法且彼此
+  // 不重複的值，就完全不動它，保留使用者刻意排的欄位（例如同一時段只有一筆
+  // 班次、但故意排在右邊那格、左邊留空）。
+  //
+  // 這裡曾經改成「每次都無條件重新編號」，結果同一時段只有一筆班次時，重新編號
+  // 會把它從使用者剛拖到的 col=1 強制拉回 col=0（因為它是這組唯一一筆、重新編號
+  // 一定是從 0 開始算），造成「拖到右邊格子又跳回左邊、看起來完全拖不動」的
+  // 新 bug。改回「只有真的壞掉才修」之後，拖曳搬到哪個欄位就會留在那個欄位。
+  //
+  // 「同一 day+time 塞進比畫面欄數還多的班次」造成的舊 bug，改由 cmRender() 用
+  // 動態 SUBCOLS（欄數 = max(設計欄數, 該時段實際筆數)）處理，只要 col 彼此不
+  // 重複，不需要靠這裡硬重新編號也能保證每一筆都排得出來、看得到。
   var groups={};
   slots.forEach(function(sl){
     var key=sl.day+'|'+sl.time;
@@ -1933,11 +1953,19 @@ function _ensureSlotCols(slots){
     groups[key].push(sl);
   });
   Object.keys(groups).forEach(function(k){
-    groups[k].sort(function(a,b){
+    var g = groups[k];
+    var seen = {}, valid = true;
+    for (var j=0;j<g.length;j++){
+      var c = g[j].col;
+      if (c===undefined || c===null || c<0 || !Number.isInteger(c) || seen[c]){ valid=false; break; }
+      seen[c]=true;
+    }
+    if (valid) return; // 現有安排沒問題，不要動它
+    g.sort(function(a,b){
       var ca=a.col!==undefined?a.col:999, cb=b.col!==undefined?b.col:999;
       return ca-cb;
     });
-    groups[k].forEach(function(sl,i){ sl.col=i; });
+    g.forEach(function(sl,i){ sl.col=i; });
   });
 }
 
