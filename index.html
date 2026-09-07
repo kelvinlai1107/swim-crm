@@ -2278,11 +2278,13 @@ function stuParseExcel(file, hallName, hallCode){
           // - 另外實測發現 G 欄常見的「查無對應學員」預留列，值不是空字串而是數字 0
           //   （應是原表用公式帶入姓名、找不到人時公式回傳 0），同樣要排除，否則會把
           //   幾百個空位誤算成正式生（1830 vs 實際 758 位的落差主要就是這個）
+          // 老師欄同樣會出現「0」這種公式落空的佔位值（例如備註列「只開體驗課」「改永久體驗」，
+          // 老師=0、班級=0、家長=#N/A），一樣代表這堂根本沒開班，要跟老師空白同樣排除
           var NAME_PLACEHOLDER = {'-':1,'－':1,'—':1,'–':1,'0':1};
           for(var ri2=2;ri2<rows2.length;ri2++){
             var r2=rows2[ri2];
             var tc2 = (r2[1]||'').toString().trim();
-            if(!tc2) continue;
+            if(!tc2 || NAME_PLACEHOLDER[tc2]) continue;
             var nm2 = (r2[6]||'').toString().trim();
             if(!nm2 || NAME_PLACEHOLDER[nm2]) continue;
             seating.push({
@@ -2791,10 +2793,12 @@ function formalRender(){
     return (a.time||'').localeCompare(b.time||'');
   });
   var ce = document.getElementById('formal-count');
-  var total = (SEAT_X||[]).length+(SEAT_B||[]).length;
-  if(ce) ce.textContent = '共 '+total+' 位學員';
+  // 標題「共 X 位學員」要跟著目前選的館別走（切西屯館只算西屯館），
+  // 側欄的總數徽章(nb-formal)則維持兩館合計，不受頁面內館別篩選影響
+  if(ce) ce.textContent = '共 '+seat.length+' 位學員';
   var nb = document.getElementById('nb-formal');
-  if(nb) nb.textContent = total||'';
+  var grandTotal = (SEAT_X||[]).length+(SEAT_B||[]).length;
+  if(nb) nb.textContent = grandTotal||'';
   var CC = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
   var html='', lastG='';
   data.forEach(function(r){
