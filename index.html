@@ -442,7 +442,11 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     </div>
     <div class="mgmt-bd" style="display:flex;flex-direction:column;gap:12px">
       <input type="hidden" id="cm-edit-idx">
-      <input type="hidden" id="cm-target-col">
+      <label id="cm-col-row" style="font-size:13px;font-weight:500">欄位位置
+        <select class="fs" id="cm-col-select" style="width:100%;margin-top:4px">
+          <option value="">自動（系統安排）</option>
+        </select>
+      </label>
       <label style="font-size:13px;font-weight:500">星期
         <select class="fs" id="cm-day" style="width:100%;margin-top:4px">
           <option value="二">週二</option><option value="三">週三</option>
@@ -3350,7 +3354,21 @@ function cmOpenAdd(){
 
 function cmOpenAddAt(day, time, colIdx){
   document.getElementById('cm-edit-idx').value='';
-  document.getElementById('cm-target-col').value = (colIdx===undefined||colIdx===null||isNaN(colIdx)) ? '' : colIdx;
+  // 欄位選單：不管是點格子上的「+」還是右上角「+新增班次」工具列按鈕開的，
+  // 都讓使用者可以自己選左/右（或北屯館的左/中/右），不要只能靠「有沒有點到
+  // 格子上的+」來決定欄位——工具列按鈕沒有欄位可傳，之前只能落在系統自動安排
+  // 的欄位（通常是最左邊），這裡讓使用者可以明確蓋過去。
+  var subcols = _cmHall==='B' ? 3 : 2;
+  var colLabels = subcols===3 ? ['左欄','中欄','右欄'] : ['左欄','右欄'];
+  var colSel = document.getElementById('cm-col-select');
+  if(colSel){
+    var opts = '<option value="">自動（系統安排）</option>';
+    for(var ci=0; ci<subcols; ci++) opts += '<option value="'+ci+'">'+colLabels[ci]+'</option>';
+    colSel.innerHTML = opts;
+    colSel.value = (colIdx===undefined||colIdx===null||isNaN(colIdx)) ? '' : String(colIdx);
+  }
+  var colRow = document.getElementById('cm-col-row');
+  if(colRow) colRow.style.display='';
   document.getElementById('cm-modal-title').textContent='新增班次';
   document.getElementById('cm-day').value = day || '二';
   document.getElementById('cm-time').value = time || '';
@@ -3366,6 +3384,8 @@ function cmOpenEdit(idx){
   var slots=cmGetSlots(), sl=slots[idx];
   if(!sl) return;
   document.getElementById('cm-edit-idx').value=idx;
+  var colRow = document.getElementById('cm-col-row');
+  if(colRow) colRow.style.display='none'; // 編輯既有班次不改欄位位置，跟原本行為一致
   document.getElementById('cm-modal-title').textContent='編輯班次';
   document.getElementById('cm-day').value=sl.day;
   document.getElementById('cm-time').value=sl.time;
@@ -3409,9 +3429,10 @@ function cmSave(){
     var students=[];
     for(var i=1;i<=cap;i++) students.push({order:i,name:'',special:false,upgrade:'',empty:true});
     var newSlot={day:day,time:time,cls:cls,teacher:teacher,students:students};
-    // 若是從某個空格的「+」點進來的，記得使用者點的是哪一欄，存的時候就放回同一欄，
-    // 而不是每次都被 _ensureSlotCols 重新排到最左邊
-    var targetColRaw = document.getElementById('cm-target-col').value;
+    // 使用者可以在「欄位位置」選單自己選左/右（不管是點格子上的+還是工具列的
+    // +新增班次開的），選了就照選的存；選「自動」才交給 _ensureSlotCols 決定
+    var colSelEl = document.getElementById('cm-col-select');
+    var targetColRaw = colSelEl ? colSelEl.value : '';
     if(targetColRaw!==''){
       var targetCol = parseInt(targetColRaw);
       var colTaken = slots.some(function(s){ return s.day===day && s.time===time && s.col===targetCol; });
