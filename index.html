@@ -2330,7 +2330,12 @@ function cmDrop(e, day, time){
   var sl = slots[_cmDragIdx];
   if(!sl){ _cmDragHall=null; _cmDragIdx=-1; return; }
 
-  // Check if target slot (same day+time on same hall) already has 2 classes (SUBCOLS)
+  // Reject if dropping onto same day+time (would disrupt fixed position order)
+  if(sl.day===day && sl.time===time){
+    _cmDragHall=null; _cmDragIdx=-1; return;
+  }
+
+  // Check capacity: target time slot must have room
   var SUBCOLS = _cmDragHall==='B' ? 3 : 2;
   var existing = slots.filter(function(s){ return s.day===day && s.time===time; });
   if(existing.length >= SUBCOLS){
@@ -2338,7 +2343,7 @@ function cmDrop(e, day, time){
     _cmDragHall=null; _cmDragIdx=-1; return;
   }
 
-  // Move: update day and time on the dragged slot
+  // Move: only change day+time, keep cls/teacher/students intact
   sl.day  = day;
   sl.time = time;
   cmSaveLocal();
@@ -2905,6 +2910,91 @@ function RVtrialClearSlot(hall, slotIdx){
   sl.students.forEach(function(s){ s.name=''; s.empty=true; s._trial=undefined; });
   cmSaveLocal();
   RVtrialRender();
+}
+
+// ── 更新問卷資料 ──────────────────────────────────────────────────────────
+function RVhandleUpload(e){
+  var file = e.target.files && e.target.files[0];
+  if(!file) return;
+  var status = document.getElementById('rv-upload-status');
+  if(status) status.innerHTML = "<div class='al al-am'>⏳ 解析中...</div>";
+
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      var wb = XLSX.read(ev.target.result, {type:'array'});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(rows.length < 2){ throw new Error('檔案沒有資料'); }
+
+      // Find header row (row with 姓名 or 館別)
+      var hdrIdx = 0;
+      for(var i=0;i<Math.min(5,rows.length);i++){
+        if(rows[i].some(function(c){ return String(c).indexOf('姓名')>=0||String(c).indexOf('館別')>=0; })){
+          hdrIdx=i; break;
+        }
+      }
+      var hdr = rows[hdrIdx].map(function(c){ return String(c).trim(); });
+
+      // Map columns
+      function col(names){
+        for(var i=0;i<hdr.length;i++){
+          if(names.some(function(n){ return hdr[i].indexOf(n)>=0; })) return i;
+        }
+        return -1;
+      }
+      var iName   = col(['姓名','學員']);
+      var iHall   = col(['館別','分館']);
+      var iPlan   = col(['續報','意願','選擇']);
+      var iCurCls = col(['目前班別','原班','現在班別']);
+      var iSubmit = col(['填寫時間','送出','提交']);
+
+      if(iName<0||iHall<0||iPlan<0){
+        throw new Error('找不到必要欄位（姓名/館別/續報意願），請確認 Excel 格式');
+      }
+
+      var newRaw = [];
+      for(var r=hdrIdx+1;r<rows.length;r++){
+        var row = rows[r];
+        if(!row[iName]) continue;
+        var name = String(row[iName]).trim();
+        var hall = String(row[iHall]||'').trim();
+        var plan = String(row[iPlan]||'').trim();
+        var curCls = iCurCls>=0 ? String(row[iCurCls]||'').trim() : '';
+        var submit = iSubmit>=0 ? String(row[iSubmit]||'').trim() : '';
+
+        // Normalize plan
+        var planKey = 'other';
+        if(plan.indexOf('原班')>=0||plan.indexOf('續報')>=0&&plan.indexOf('換')< 0) planKey='keep';
+        else if(plan.indexOf('換班')>=0||plan.indexOf('換')>=0) planKey='change';
+        else if(plan.indexOf('不')>=0||plan.indexOf('停')>=0) planKey='stop';
+
+        newRaw.push({
+          name:name, hall:hall, plan:planKey,
+          cur_cls:curCls, submit:submit,
+          wls:[], payDone:false
+        });
+      }
+
+      // Replace RV_RAW
+      RV_RAW = newRaw;
+      // Save to localStorage
+      try{ localStorage.setItem('crm_rv_raw', JSON.stringify(RV_RAW)); }catch(ex){}
+
+      if(status) status.innerHTML = "<div class='al al-ok'>✓ 已匯入 "+newRaw.length+" 筆問卷資料</div>";
+      // Re-render current tab
+      setTimeout(function(){
+        if(typeof RVbuildWL==='function') RVbuildWL();
+      }, 300);
+
+    }catch(ex){
+      console.error('RVhandleUpload error:', ex);
+      if(status) status.innerHTML = "<div class='al al-rd'>✗ 解析失敗："+ex.message+"</div>";
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  // Reset input so same file can be re-selected
+  e.target.value = '';
 }
 
 </script>
