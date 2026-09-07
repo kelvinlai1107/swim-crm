@@ -2272,14 +2272,21 @@ function stuParseExcel(file, hallName, hallCode){
         var seating = [];
         if(ws2){
           var rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, raw:false, defval:''});
+          // 劃位名單(勿改) 判斷規則（依實際規則確認）：
+          // - B欄(老師)要有值，該堂課才算是有開班；B欄空白代表這堂沒開，整列排除
+          // - G欄(姓名)要有實際姓名才算有學員；空白、"-"（及全形/破折號變體）都排除
+          // - 另外實測發現 G 欄常見的「查無對應學員」預留列，值不是空字串而是數字 0
+          //   （應是原表用公式帶入姓名、找不到人時公式回傳 0），同樣要排除，否則會把
+          //   幾百個空位誤算成正式生（1830 vs 實際 758 位的落差主要就是這個）
+          var NAME_PLACEHOLDER = {'-':1,'－':1,'—':1,'–':1,'0':1};
           for(var ri2=2;ri2<rows2.length;ri2++){
             var r2=rows2[ri2];
-            // 劃位名單(勿改) 會預留該班尚未收到學員的空白列（姓名欄可能只有空白字元），
-            // 這些空位不算一個學員，必須用 trim 後的值判斷，不能只看是否為 falsy
+            var tc2 = (r2[1]||'').toString().trim();
+            if(!tc2) continue;
             var nm2 = (r2[6]||'').toString().trim();
-            if(!nm2) continue;
+            if(!nm2 || NAME_PLACEHOLDER[nm2]) continue;
             seating.push({
-              order:r2[0], teacher:r2[1], day:r2[2], time:r2[3], cls:r2[4],
+              order:r2[0], teacher:tc2, day:r2[2], time:r2[3], cls:r2[4],
               parent:r2[5], name:nm2, dob:(r2[7]||'').split(' ')[0],
               total_s:r2[8], seasons:r2[9], phone:r2[10],
               age_upg:r2[11], special:r2[12], upgrade:r2[13], upg_note:r2[14]
