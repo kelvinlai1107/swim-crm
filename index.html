@@ -2720,680 +2720,569 @@ function seatMove(hall, day, time, cls, teacher, order, name){
 
 
 // ── 續報作業 Tab 切換 ──────────────────────────────────────────────────────
-var _rvTab = 'upload';
-
-function RVinit(){
-  // Load per-season RV data
-  try{
-    var rvKey='crm_rv_raw_'+_curSeason;
-    var saved=localStorage.getItem(rvKey);
-    if(saved) RV_RAW=JSON.parse(saved);
-    else RV_RAW=[];
-  }catch(e){}
-  var btn = document.querySelector('[onclick*="RVtab(\''+_rvTab+'\'"]');
-  RVtab(_rvTab, btn);
-}
-
-function RVtab(tab, btn){
-  _rvTab = tab;
-  // Hide all known tab panels
-  ['wl','stu','heat','grid','dups','upload','trial'].forEach(function(t){
-    var el = document.getElementById('rv-'+t);
-    if(el) el.style.display = 'none';
-  });
-  // Show target
-  var target = document.getElementById('rv-'+tab);
-  if(target) target.style.display = '';
-  // Update tab styles
-  document.querySelectorAll('#rv-ptabs .ptab').forEach(function(b){
-    b.classList.remove('active');
-  });
-  if(btn) btn.classList.add('active');
-  // Trigger render
-  if(tab==='wl'   && typeof RVbuildWL==='function') RVbuildWL();
-  if(tab==='stu'  && typeof RVstuRender==='function') RVstuRender();
-  if(tab==='heat' && typeof RVrenderHeat==='function') RVrenderHeat();
-  if(tab==='grid' && typeof RVrenderGrid==='function') RVrenderGrid();
-  if(tab==='dups' && typeof RVrenderDups==='function') RVrenderDups();
-  if(tab==='trial') RVtrialRender();
-}
-
-// ── 劃位試排 ─────────────────────────────────────────────────────────────
-function RVtrialRender(){
-  var hall = (document.getElementById('rv-trial-hall')||{}).value || 'X';
-  var body = document.getElementById('rv-trial-body');
-  if(!body) return;
-
-  // Use NEXT season's slots (current season in _curSeason)
-  // The trial uses current season's SLOTS as the new layout
-  var slots = hall==='X' ? SLOTS_X : SLOTS_B;
-  if(!slots || !slots.length){
-    body.innerHTML='<div style="padding:32px;text-align:center;color:var(--tx3)">目前學期尚無班次，請先在班級管理建立課表</div>';
-    return;
-  }
-
-  var BG  = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
-  var FG  = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var TBG = '#EEF2FF', TW=52, CW=80, HH=24, SH=20;
-  var DO  = {'二':0,'三':1,'四':2,'五':3,'六':4};
-  var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
-
-  var wdDaySet={}, saTimeSet={}, wdTimeSet={};
-  slots.forEach(function(sl){
-    if(sl.day==='六'){ saTimeSet[sl.time]=true; }
-    else { wdDaySet[sl.day]=true; wdTimeSet[sl.time]=true; }
-  });
-  var wdDays=['二','三','四','五'].filter(function(d){return wdDaySet[d];});
-  var hasSat=slots.some(function(sl){return sl.day==='六';});
-  var wdTimes=Object.keys(wdTimeSet).sort();
-  var saTimes=Object.keys(saTimeSet).sort();
-  var SUBCOLS=hall==='B'?3:2;
-
-  function getSlots(day,time){
-    return slots.filter(function(sl){return sl.day===day&&sl.time===time;})
-      .sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);});
-  }
-  function slotIdx(sl){ return slots.indexOf(sl); }
-
-  function slotCell(sl){
-    if(!sl) return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e0e0e0;background:#fafafa"></td>';
-    var idx=slotIdx(sl);
-    var bg=BG[sl.cls]||'#fff', fg=FG[sl.cls]||'#333';
-    var filled=sl.students.filter(function(s){return !s.empty;}).length;
-    var cap=sl.students.length;
-    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0">';
-    // Header: class badge + teacher + fill count + right-click hint
-    h+='<div oncontextmenu="RVtrialCtx(event,\''+hall+'\','+idx+')" style="background:'+bg+';height:'+HH+'px;display:flex;align-items:center;gap:4px;padding:0 6px;border-bottom:1px solid #ccc;cursor:context-menu">';
-    h+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+sl.cls+'</span>';
-    h+='<span style="font-size:11px;color:#444;font-weight:600">'+sl.teacher+'</span>';
-    h+='<span style="font-size:10px;color:#999;margin-left:auto">'+filled+'/'+cap+'</span>';
-    h+='</div>';
-    // Students
-    sl.students.forEach(function(s){
-      if(s.empty){
-        h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;color:#ddd;font-size:11px">—</div>';
-      } else {
-        var nameColor = s._trial==='keep'?'color:#C62828;font-weight:600' : s._trial==='new'?'color:#E65100;font-weight:600' : 'color:#333';
-        h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;font-size:11px;'+nameColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+'</div>';
-      }
-    });
-    h+='</td>';
-    return h;
-  }
-
-  function buildSection(days, times, isSat){
-    var nc=days.length*SUBCOLS;
-    var tableW=TW+nc*CW;
-    var t='<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;width:'+tableW+'px;min-width:'+tableW+'px">';
-    t+='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
-    for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
-    t+='</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
-    var sth=isSat?'':'position:sticky;left:0;z-index:20;';
-    t+='<th rowspan="2" style="'+sth+'width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
-    days.forEach(function(d){
-      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
-    });
-    t+='</tr><tr>';
-    for(var i=0;i<nc;i++) t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0">班別</th>';
-    t+='</tr></thead><tbody>';
-    var pg=-1;
-    times.forEach(function(time){
-      var grp=parseInt(time)<12?0:parseInt(time)<18?1:2;
-      if(pg>=0&&grp!==pg) t+='<tr><td colspan="'+(1+nc)+'" style="height:3px;background:#ccc;border:none;padding:0"></td></tr>';
-      pg=grp;
-      var ts=(isSat?'':'position:sticky;left:0;z-index:5;')+'width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;padding:2px;vertical-align:middle';
-      t+='<tr><td style="'+ts+'">'+time+'</td>';
-      days.forEach(function(d){
-        var ds=getSlots(d,time);
-        for(var si=0;si<SUBCOLS;si++) t+=slotCell(ds[si]||null);
-      });
-      t+='</tr>';
-    });
-    return t+'</tbody></table>';
-  }
-
-  var wdW=TW+wdDays.length*SUBCOLS*CW, saW=TW+SUBCOLS*CW;
-  var wdHTML=wdTimes.length?buildSection(wdDays,wdTimes,false):'';
-  var saHTML=(hasSat&&saTimes.length)?buildSection(['六'],saTimes,true):'';
-
-  body.innerHTML='<div style="display:flex;gap:6px;align-items:flex-start">'+
-    (wdHTML?'<div style="flex:0 0 '+wdW+'px;width:'+wdW+'px">'+wdHTML+'</div>':'')+
-    (saHTML?'<div style="flex:0 0 '+saW+'px;width:'+saW+'px">'+saHTML+'</div>':'')+
-    '</div>';
-}
-
-// ── 右鍵選單：帶入原班學員 ──────────────────────────────────────────────
-var _trialCtxMenu = null;
-
-function RVtrialCtx(e, hall, slotIdx){
-  e.preventDefault();
-  if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
-  var menu=document.createElement('div');
-  menu.style.cssText='position:fixed;z-index:9999;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.15);padding:4px 0;font-size:13px;min-width:180px';
-  menu.style.left=Math.min(e.clientX,window.innerWidth-200)+'px';
-  menu.style.top=Math.min(e.clientY,window.innerHeight-120)+'px';
-  menu.innerHTML=
-    '<div style="padding:6px 14px;font-size:11px;color:#888;border-bottom:1px solid #eee">劃位試排操作</div>'+
-    '<div class="ctx-item" onclick="RVtrialImport(\''+hall+'\','+slotIdx+')">📋 帶入原班學員</div>'+
-    '<div class="ctx-item" onclick="RVtrialClearSlot(\''+hall+'\','+slotIdx+')">🗑 清空此班學員</div>';
-  document.body.appendChild(menu);
-  _trialCtxMenu=menu;
-  document.addEventListener('click', function once(){ menu.remove(); _trialCtxMenu=null; document.removeEventListener('click',once); });
-}
-
-// ── 帶入原班學員 Modal ───────────────────────────────────────────────────
-var _trialImportTarget = null;
-
-function RVtrialImport(hall, slotIdx){
-  if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
-  var slots = hall==='X' ? SLOTS_X : SLOTS_B;
-  var sl = slots[slotIdx];
-  if(!sl) return;
-  _trialImportTarget = {hall:hall, slotIdx:slotIdx};
-
-  // Load previous season slots
-  var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-  var seasons=['S1','S2','S3'].filter(function(s){return s!==_curSeason;});
-
-  // Build source slot list from all previous seasons
-  function getPrevSlots(s, h){
-    if(s==='S2'){
-      return h==='X'?(_baseSlotX?JSON.parse(JSON.stringify(_baseSlotX)):[]):(_baseSlotB?JSON.parse(JSON.stringify(_baseSlotB)):[]);
-    }
-    try{
-      var saved=localStorage.getItem('crm_slots_'+(h==='X'?'x':'b')+'_'+s);
-      return saved?JSON.parse(saved):[];
-    }catch(e){return [];}
-  }
-
-  // Collect all source slots with students
-  var CLS_GRP={N:'親子',A:'親子',B:'親子',C:'幼兒',D:'幼兒',E:'兒童',F:'兒童'};
-  var FG2={A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var allSrcSlots=[];
-  seasons.forEach(function(s){
-    ['X','B'].forEach(function(h){
-      var prevSlots=getPrevSlots(s,h);
-      prevSlots.forEach(function(psl){
-        var filled=psl.students.filter(function(st){return !st.empty;}).length;
-        if(filled>0) allSrcSlots.push({season:s,hall:h,slot:psl,label:'['+SLB[s]+(h==='X'?'西屯':'北屯')+'] 週'+psl.day+' '+psl.time+' '+psl.cls+'班 '+psl.teacher+' ('+filled+'人)',grp:CLS_GRP[psl.cls]||'其他',cls:psl.cls});
-      });
-    });
-  });
-
-  if(!allSrcSlots.length){ alert('找不到其他學期的班次資料，請先確認其他學期有資料'); return; }
-
-  // Group by 親子/幼兒/兒童
-  var GRPS=['親子','幼兒','兒童'];
-  var byGrp={};
-  GRPS.forEach(function(g){byGrp[g]=[];});
-  allSrcSlots.forEach(function(item){ if(byGrp[item.grp]) byGrp[item.grp].push(item); });
-
-  var modal=document.getElementById('rv-import-modal');
-  if(!modal){
-    modal=document.createElement('div');
-    modal.id='rv-import-modal';
-    modal.className='mgmt-ov';
-    document.body.appendChild(modal);
-  }
-
-  var listHTML='';
-  GRPS.forEach(function(grp){
-    if(!byGrp[grp].length) return;
-    listHTML+='<div style="font-size:11px;font-weight:700;color:#888;padding:6px 0 3px;text-transform:uppercase">'+grp+'</div>';
-    byGrp[grp].forEach(function(item,i){
-      var key=item.season+'|'+item.hall+'|'+allSrcSlots.indexOf(item);
-      listHTML+='<label style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:13px">';
-      listHTML+='<input type="radio" name="rv-import-src" value="'+allSrcSlots.indexOf(item)+'">';
-      listHTML+='<span style="width:18px;height:18px;border-radius:50%;background:'+(FG2[item.cls]||'#999')+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+item.cls+'</span>';
-      listHTML+=item.label;
-      listHTML+='</label>';
-    });
-  });
-
-  modal.innerHTML='<div class="mgmt-pn" style="width:480px">'+
-    '<div class="mgmt-hd"><span style="font-size:15px;font-weight:700">帶入原班學員</span>'+
-    '<button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById(\'rv-import-modal\').classList.remove(\'open\')">×</button></div>'+
-    '<div class="mgmt-bd">'+
-    '<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">選擇來源班次，將該班學員帶入「<strong>週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+'</strong>」</div>'+
-    '<div style="max-height:360px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:8px 12px">'+listHTML+'</div></div>'+
-    '<div class="mgmt-ft">'+
-    '<button class="btn bs sm" onclick="document.getElementById(\'rv-import-modal\').classList.remove(\'open\')">取消</button>'+
-    '<button class="btn bp sm" onclick="RVtrialDoImport()">帶入學員</button></div></div>';
-  modal.classList.add('open');
-  // Store allSrcSlots for use in RVtrialDoImport
-  window._trialSrcSlots = allSrcSlots;
-}
-
-function RVtrialDoImport(){
-  var radio=document.querySelector('[name="rv-import-src"]:checked');
-  if(!radio){ alert('請選擇來源班次'); return; }
-  var srcIdx=parseInt(radio.value);
-  var src=window._trialSrcSlots[srcIdx];
-  if(!src||!_trialImportTarget) return;
-
-  var slots=_trialImportTarget.hall==='X'?SLOTS_X:SLOTS_B;
-  var target=slots[_trialImportTarget.slotIdx];
-  if(!target){ alert('目標班次找不到'); return; }
-
-  // Copy students from source to target, mark as _trial:'keep'
-  var srcStudents=src.slot.students.filter(function(s){return !s.empty;});
-  var cap=target.students.length;
-  // Reset target students
-  for(var i=0;i<cap;i++){
-    if(i<srcStudents.length){
-      target.students[i].name=srcStudents[i].name;
-      target.students[i].empty=false;
-      target.students[i].special=srcStudents[i].special||false;
-      target.students[i]._trial='keep';
-    } else {
-      target.students[i].name='';
-      target.students[i].empty=true;
-      target.students[i]._trial=undefined;
-    }
-  }
-
-  cmSaveLocal();
-  document.getElementById('rv-import-modal').classList.remove('open');
-  RVtrialRender();
-  alert('✓ 已帶入 '+srcStudents.length+' 位學員到 週'+target.day+' '+target.time+' '+target.cls+'班');
-}
-
-function RVtrialClearSlot(hall, slotIdx){
-  if(_trialCtxMenu){ _trialCtxMenu.remove(); _trialCtxMenu=null; }
-  var slots=hall==='X'?SLOTS_X:SLOTS_B;
-  var sl=slots[slotIdx];
-  if(!sl||!confirm('確定清空 週'+sl.day+' '+sl.time+' '+sl.cls+'班 '+sl.teacher+' 的學員？')) return;
-  sl.students.forEach(function(s){ s.name=''; s.empty=true; s._trial=undefined; });
-  cmSaveLocal();
-  RVtrialRender();
-}
-
-// ── 更新問卷資料 ──────────────────────────────────────────────────────────
-// ── 班別候補名單 (rv-wl) ────────────────────────────────────────────────
-// ── 班別候補名單 ──────────────────────────────────────────────────────────
-function RVrender(){ RVbuildWL(); }
-
 function RVbuildWL(){
-  var raw=RV_RAW||[];
-  var hallF=(document.getElementById('rv-hall')||{}).value||'';
-  var clsF=(document.getElementById('rv-cls')||{}).value||'';
-  var listEl=document.getElementById('rv-cls-list');
-  var detEl=document.getElementById('rv-wl-pn');
-  if(!listEl) return;
-  var counts={};
-  raw.forEach(function(r){
-    if(r.plan!=='change') return;
-    if(hallF && r.hall!==hallF) return;
-    var seen={};
-    (r.wls||[]).forEach(function(wl){
-      if(hallF && wl.hall!==hallF) return;
-      var key=wl.hall+'|'+wl.cls;
-      if(!seen[key]){ seen[key]=true; if(!counts[key]) counts[key]={hall:wl.hall,cls:wl.cls,total:0}; counts[key].total++; }
-    });
+  var byName = {};
+  RV_RAW.forEach(function(e){
+    if(!byName[e.name]) byName[e.name]=[];
+    byName[e.name].push(e);
   });
-  var CLS_ORD=['A','B','C','D','E','F'];
-  var CLS_FULL={'A':'亲子A','B':'亲子B','C':'幼儿C','D':'幼儿D','E':'儿童E','F':'儿童F'};
-  var CLS_FULL2={'A':'\u89AA\u5B50A','B':'\u89AA\u5B50B','C':'\u5E7C\u5152C','D':'\u5E7C\u5152D','E':'\u5152\u7AE5E','F':'\u5152\u7AE5F'};
-  var CLS_COL={'A':'#E53935','B':'#E53935','C':'#BF8F00','D':'#BF8F00','E':'#388E3C','F':'#388E3C'};
-  var HALLS=['\u897F\u5C6C','\u5317\u5C6C'];
-  var listHTML='', firstItem=null;
-  var hallsToShow=hallF?[hallF]:HALLS;
-  hallsToShow.forEach(function(hall){
-    var hallTag=hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:10px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:10px">\u5317\u5C6C</span>';
-    CLS_ORD.forEach(function(cls){
-      if(clsF && CLS_FULL2[cls]!==clsF) return;
-      var key=hall+'|'+cls;
-      var cnt=counts[key]?counts[key].total:0;
-      if(!cnt) return;
-      var col=CLS_COL[cls];
-      var id='wl-'+hall+'-'+cls;
-      if(!firstItem) firstItem={hall:hall,cls:cls};
-      listHTML+='<div class="cls-item" id="'+id+'" onclick="RVshowWL(\''+hall+'\',\''+cls+'\')" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px">'
-        +hallTag+'<span style="width:26px;height:26px;border-radius:50%;background:'+col+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+cls+'</span>'
-        +'<span style="flex:1;font-size:13px">'+CLS_FULL2[cls]+'</span>'
-        +'<span style="font-size:12px;color:#E67E22;font-weight:700">'+cnt+'\u4EBA</span></div>';
-    });
+  Object.keys(byName).forEach(function(name){
+    byName[name].sort(function(a,b){ return a.submit>b.submit?-1:1; });
   });
-  listEl.innerHTML=listHTML||'<div style="padding:16px;color:var(--tx3);font-size:13px">\u66AB\u7121\u63DB\u73ED\u9700\u6C42</div>';
-  if(firstItem) RVshowWL(firstItem.hall,firstItem.cls);
-  else detEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--tx3);font-size:13px">\u2190 \u9078\u64C7\u5DE6\u5074\u73ED\u5225\u67E5\u770B\u5019\u88DC\u540D\u55AE</div>';
-}
-
-function RVshowWL(hall,cls){
-  var detEl=document.getElementById('rv-wl-pn'); if(!detEl) return;
-  document.querySelectorAll('.cls-item').forEach(function(el){el.style.background='';el.style.borderLeft='';});
-  var active=document.getElementById('wl-'+hall+'-'+cls);
-  if(active){active.style.background='var(--pr-bg)';active.style.borderLeft='3px solid var(--pr)';}
-  var CLS_FULL={A:'\u89AA\u5B50A',B:'\u89AA\u5B50B',C:'\u5E7C\u5152C',D:'\u5E7C\u5152D',E:'\u5152\u7AE5E',F:'\u5152\u7AE5F'};
-  var CLS_COL={A:'#E53935',B:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var HALL_TAG=hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:11px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:11px">\u5317\u5C6C</span>';
-  var CLS_TAG='<span style="background:'+CLS_COL[cls]+';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">'+CLS_FULL[cls]+'</span>';
-  var BACKUP_LABEL={keep:'\u56DE\u539F\u73ED',teacher:'\u8ACB\u8001\u5E2B',stop:'\u4E0D\u518D\u5831'};
-  var BACKUP_COLOR={keep:'#388E3C',teacher:'#E67E22',stop:'#C0392B'};
-  var DAYS=['\u9031\u4E8C','\u9031\u4E09','\u9031\u56DB','\u9031\u4E94','\u9031\u516D'];
-  var raw=RV_RAW||[];
-  var timeGroups={};
-  raw.forEach(function(r){
-    if(r.plan!=='change') return;
-    (r.wls||[]).forEach(function(wl){
-      if(wl.hall!==hall||wl.cls!==cls) return;
-      var key=wl.day+'|'+wl.time;
-      if(!timeGroups[key]) timeGroups[key]={day:wl.day,time:wl.time,list:[]};
-      timeGroups[key].list.push({name:r.name,hall:r.hall,rank:wl.rank,backup:r.backup,submit:r.submit});
-    });
+  var deduped = [];
+  Object.keys(byName).forEach(function(name){
+    var entries = byName[name];
+    if(entries.length===1){ deduped.push(entries[0]); return; }
+    var choice = RV_CHOICES[name];
+    if(choice===-1) return;
+    var idx = (choice==null) ? 0 : choice;
+    if(entries[idx]) deduped.push(entries[idx]);
   });
-  var total=Object.keys(timeGroups).reduce(function(acc,k){
-    var names={};
-    timeGroups[k].list.forEach(function(x){names[x.name]=true;});
-    return acc+Object.keys(names).length;
-  },0);
-  // Use unique person count
-  var uniqNames={};
-  raw.forEach(function(r){
-    if(r.plan!=='change') return;
-    (r.wls||[]).forEach(function(wl){
-      if(wl.hall===hall&&wl.cls===cls) uniqNames[r.name]=true;
-    });
-  });
-  var personCount=Object.keys(uniqNames).length;
-  if(!personCount){detEl.innerHTML='<div style="padding:16px;color:var(--tx3)">\u6B64\u73ED\u7121\u63DB\u73ED\u5019\u88DC</div>';return;}
-  var sortedKeys=Object.keys(timeGroups).sort(function(a,b){
-    var ga=timeGroups[a],gb=timeGroups[b];
-    var di=DAYS.indexOf(ga.day)-DAYS.indexOf(gb.day);
-    return di!==0?di:ga.time.localeCompare(gb.time);
-  });
-  var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+HALL_TAG+CLS_TAG
-    +'<span style="font-size:13px;color:var(--tx2)">\u5171 <b>'+personCount+'</b> \u4EBA\u5019\u88DC</span></div>'
-    +'<div style="overflow-y:auto;max-height:calc(100vh - 320px)">';
-  sortedKeys.forEach(function(key){
-    var grp=timeGroups[key];
-    grp.list.sort(function(a,b){return a.rank-b.rank;});
-    html+='<div style="background:var(--sf);border-radius:8px;margin-bottom:10px;overflow:hidden">'
-      +'<div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--tx);background:var(--bd);display:flex;align-items:center;gap:8px">'
-      +'<span>'+grp.day+' '+grp.time+'</span><span style="color:var(--tx3);font-weight:400">'+grp.list.length+' \u4EBA\u5019\u88DC</span></div>';
-    grp.list.forEach(function(item,i){
-      var hl=item.hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:9px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:9px">\u5317\u5C6C</span>';
-      var bu=item.backup?BACKUP_LABEL[item.backup]||item.backup:'';
-      var buColor=BACKUP_COLOR[item.backup]||'#999';
-      var dt=item.submit?item.submit.replace('2026-','').replace(/-/g,'/').replace(' ',' '):'';
-      html+='<div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px">'
-        +'<span style="width:20px;height:20px;border-radius:50%;background:var(--pr);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(i+1)+'</span>'
-        +'<span style="font-weight:600;font-size:13px;flex:1">'+item.name+'</span>'+hl
-        +'<span style="font-size:10px;color:var(--tx3)">\u7B2C '+item.rank+' \u5FD7\u9858</span>'
-        +(bu?'<span style="font-size:11px;font-weight:600;color:'+buColor+'">'+bu+'</span>':'')
-        +'<span style="font-size:11px;color:var(--tx3)">'+dt+'</span></div>';
-    });
-    html+='</div>';
-  });
-  detEl.innerHTML=html+'</div>';
-}
-
-// ── 學員志願總覽 ──────────────────────────────────────────────────────────
-function RVstuRender(){
-  var q=(document.getElementById('rv-q')||{}).value||'';
-  var plan=(document.getElementById('rv-plan')||{}).value||'';
-  var hall=(document.getElementById('rv-hall2')||{}).value||'';
-  var tbody=document.getElementById('rv-stu-body'); if(!tbody) return;
-  var PLAN_LABEL={keep:'\u539F\u73ED\u7E8C\u5831',change:'\u63DB\u73ED\u7E8C\u5831',stop:'\u4E0D\u7E8C\u5831',other:'\u672A\u77E5'};
-  var PLAN_STYLE={keep:'color:#388E3C',change:'color:#E67E22;font-weight:700',stop:'color:#C0392B',other:'color:#999'};
-  var CLS_FULL={A:'\u89AA\u5B50A',B:'\u89AA\u5B50B',C:'\u5E7C\u5152C',D:'\u5E7C\u5152D',E:'\u5152\u7AE5E',F:'\u5152\u7AE5F'};
-  var BACKUP_LABEL={keep:'\u56DE\u539F\u73ED',teacher:'\u8ACB\u8001\u5E2B',stop:'\u4E0D\u518D\u5831'};
-  var BACKUP_COLOR={keep:'#388E3C',teacher:'#E67E22',stop:'#C0392B'};
-  var raw=(RV_RAW||[]).filter(function(r){
-    if(q&&r.name.indexOf(q)<0) return false;
-    if(plan&&r.plan!==plan) return false;
-    if(hall&&r.hall!==hall) return false;
-    return true;
-  });
-  if(!raw.length){tbody.innerHTML='<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--tx3)">\u66AB\u7121\u8CC7\u6599</td></tr>';return;}
-  var html='';
-  raw.forEach(function(r,i){
-    var hallTag=r.hall==='\u897F\u5C6C'?'<span class="tag t-bl" style="font-size:10px">\u897F\u5C6C</span>':'<span class="tag t-pu" style="font-size:10px">\u5317\u5C6C</span>';
-    var curClsFull=(CLS_FULL[r.cur_cls]||r.cur_cls)||'\u2014';
-    var wlSummary='\u2014';
-    if(r.wls&&r.wls.length){
-      wlSummary=r.wls.slice(0,3).map(function(wl,wi){
-        return '<span style="font-size:11px;background:#FFF3E0;color:#E67E22;padding:1px 5px;border-radius:3px;margin:1px;display:inline-block">'
-          +wl.hall+(CLS_FULL[wl.cls]||wl.cls)+' '+wl.day+' '+wl.time+'</span>';
-      }).join('');
-      if(r.wls.length>3) wlSummary+='<span style="font-size:11px;color:var(--tx3)"> +'+(r.wls.length-3)+'</span>';
-    }
-    var bu=r.backup?BACKUP_LABEL[r.backup]||r.backup:'';
-    var buColor=BACKUP_COLOR[r.backup]||'#999';
-    var dt=r.submit?r.submit.replace('2026-','').replace(/-/g,'/').split(' ')[0]:'';
-    html+='<tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 8px;color:var(--tx3)">'+(i+1)+'</td>'
-      +'<td style="padding:5px 8px;font-weight:600">'+r.name+'</td>'
-      +'<td style="padding:5px 8px">'+hallTag+'</td>'
-      +'<td style="padding:5px 8px">'+curClsFull+'</td>'
-      +'<td style="padding:5px 8px"><span style="'+PLAN_STYLE[r.plan]+'">'+PLAN_LABEL[r.plan]+'</span></td>'
-      +'<td style="padding:5px 8px">'+wlSummary+'</td>'
-      +'<td style="padding:5px 8px">'+(bu?'<span style="font-size:11px;font-weight:600;color:'+buColor+'">'+bu+'</span>':'\u2014')+'</td>'
-      +'<td style="padding:5px 8px;font-size:11px;color:var(--tx3)">'+dt+'</td></tr>';
-  });
-  tbody.innerHTML=html;
-}
-
-// ── 各班需求分析 (bar chart) ──────────────────────────────────────────────
-function RVrenderHeat(){
-  var el=document.getElementById('rv-heat-body'); if(!el) return;
-  var raw=RV_RAW||[];
-  if(!raw.length){el.innerHTML='<div style="padding:16px;color:var(--tx3)">\u8ACB\u5148\u4E0A\u50B3\u554F\u5377\u8CC7\u6599</div>';return;}
-  var CLS_ORD=['A','B','C','D','E','F'];
-  var CLS_FULL={A:'\u89AA\u5B50A',B:'\u89AA\u5B50B',C:'\u5E7C\u5152C',D:'\u5E7C\u5152D',E:'\u5152\u7AE5E',F:'\u5152\u7AE5F'};
-  var CLS_COL={A:'#E53935',B:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var HALLS=['\u897F\u5C6C','\u5317\u5C6C'];
-  var html='';
-  HALLS.forEach(function(hall){
-    var hallRaw=raw.filter(function(r){return r.hall===hall;});
-    var keep=hallRaw.filter(function(r){return r.plan==='keep';}).length;
-    var change=hallRaw.filter(function(r){return r.plan==='change';}).length;
-    var stop=hallRaw.filter(function(r){return r.plan==='stop';}).length;
-    html+='<div style="margin-bottom:28px"><div style="font-weight:700;font-size:15px;margin-bottom:12px;border-bottom:2px solid var(--bd);padding-bottom:8px">'
-      +hall+'\u9928 \u2014 \u5404\u73ED\u6642\u6BB5\u5019\u88DC\u9700\u6C42'
-      +'<span style="margin-left:12px;font-size:12px;font-weight:400;color:var(--tx3)">\u56DE\u8986 '+hallRaw.length+' \u4EBA\uFF5C\u539F\u73ED '+keep+'\uFF5C\u63DB\u73ED '+change+'\uFF5C\u4E0D\u7E8C\u5831 '+stop+'</span></div>';
-    var shownAny=false;
-    CLS_ORD.forEach(function(cls){
-      var slotCounts={};
-      var clsChangers=0;
-      raw.forEach(function(r){
-        if(r.plan!=='change') return;
-        var seen={};
-        (r.wls||[]).forEach(function(wl){
-          if(wl.hall!==hall||wl.cls!==cls) return;
-          var key=wl.day+'|'+wl.time;
-          if(!seen[key]){seen[key]=true;slotCounts[key]=(slotCounts[key]||0)+1;clsChangers++;}
-        });
+  var wl = {}, sc = {};
+  deduped.forEach(function(e){
+    (e.wls||[]).forEach(function(wl_item){
+      var key = wl_item.hall + wl_item.class;
+      if(!wl[key]) wl[key]=[];
+      wl[key].push({
+        name:e.name, home:e.hall, submit:e.submit, fallback:e.fallback, slots:wl_item.slots
       });
-      if(!clsChangers) return;
-      shownAny=true;
-      var sortedSlots=Object.keys(slotCounts).sort(function(a,b){return slotCounts[b]-slotCounts[a];});
-      var maxC=slotCounts[sortedSlots[0]]||1;
-      var col=CLS_COL[cls];
-      html+='<div style="margin-bottom:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-        +'<span style="background:'+col+';color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700">'+CLS_FULL[cls]+'</span>'
-        +'<span style="font-size:12px;color:var(--tx3)">'+clsChangers+' \u4EBA\u5019\u88DC</span></div>';
-      sortedSlots.forEach(function(key){
-        var parts=key.split('|');
-        var cnt=slotCounts[key];
-        var barW=Math.round(cnt/maxC*100);
-        html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
-          +'<span style="min-width:72px;font-size:12px;color:var(--tx2)">'+parts[0]+' '+parts[1]+'</span>'
-          +'<div style="flex:1;background:var(--bd);border-radius:4px;height:18px;overflow:hidden">'
-          +'<div style="height:100%;background:'+col+';width:'+barW+'%;border-radius:4px"></div></div>'
-          +'<span style="min-width:20px;text-align:right;font-size:12px;font-weight:600;color:'+col+'">'+cnt+'</span></div>';
-      });
-      html+='</div>';
     });
-    if(!shownAny) html+='<div style="color:var(--tx3);font-size:13px;padding:8px 0">\u6B64\u9928\u7121\u63DB\u73ED\u9700\u6C42</div>';
-    html+='</div>';
   });
-  el.innerHTML=html;
+  Object.keys(wl).forEach(function(key){
+    wl[key].sort(function(a,b){ return a.submit<b.submit?-1:1; });
+    wl[key].forEach(function(item,i){ item.rank=i+1; });
+    var cnt={};
+    wl[key].forEach(function(item){
+      item.slots.forEach(function(s){ cnt[s.slot]=(cnt[s.slot]||0)+1; });
+    });
+    var sorted=Object.entries(cnt).sort(function(a,b){ return b[1]-a[1]; });
+    sc[key]={};
+    sorted.forEach(function(kv){ sc[key][kv[0]]=kv[1]; });
+  });
+  RV_WL = wl;
+  RV_SC = sc;
 }
 
-// ── 課表候補視圖 ──────────────────────────────────────────────────────────
-function RVgrid(){
-  var hallSel=document.getElementById('rv-grid-hall');
-  var clsSel=document.getElementById('rv-grid-cls');
-  var searchEl=document.getElementById('rv-grid-search');
-  var bodyEl=document.getElementById('rv-grid-body'); if(!bodyEl) return;
-  var hall=hallSel?hallSel.value:'\u897F\u5C6C';
-  var clsFull=clsSel?clsSel.value:'\u89AA\u5B50A';
-  var cls=clsFull.slice(-1);
-  var q=searchEl?searchEl.value.trim():'';
-  var CLS_COL={A:'#E53935',B:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var DAYS=['\u9031\u4E8C','\u9031\u4E09','\u9031\u56DB','\u9031\u4E94','\u9031\u516D'];
-  var BACKUP_LABEL={keep:'\u56DE\u539F',teacher:'\u8ACB\u5E2B',stop:'\u4E0D\u5831'};
-  var BACKUP_BG={keep:'#E8F5E9',teacher:'#FFF3E0',stop:'#FFEBEE'};
-  var BACKUP_COLOR={keep:'#388E3C',teacher:'#E67E22',stop:'#C0392B'};
-  var slotMap={};
-  (RV_RAW||[]).forEach(function(r){
-    if(r.plan!=='change') return;
-    if(q&&r.name.indexOf(q)<0) return;
-    (r.wls||[]).forEach(function(wl){
-      if(wl.hall!==hall||wl.cls!==cls) return;
-      var key=wl.day+'|'+wl.time;
-      if(!slotMap[key]) slotMap[key]=[];
-      slotMap[key].push({name:r.name,rank:wl.rank,backup:r.backup});
+function RVrebuildDups(){
+  var byName={};
+  RV_RAW.forEach(function(e){
+    if(!byName[e.name]) byName[e.name]=[];
+    byName[e.name].push(e);
+  });
+  var newDups=[];
+  Object.keys(byName).forEach(function(name){
+    var entries=byName[name];
+    if(entries.length<2) return;
+    entries.sort(function(a,b){ return a.submit>b.submit?-1:1; });
+    newDups.push({
+      name:name,
+      entries:entries.map(function(e){ return {submit:e.submit,hall:e.hall,plan:e.plan}; }),
+      resolved:null
     });
   });
-  if(!Object.keys(slotMap).length){
-    bodyEl.innerHTML='<div style="padding:16px;color:var(--tx3);font-size:13px">'+(q?'\u641C\u5C0B\u7121\u7D50\u679C':'\u6B64\u9928\u6B64\u73ED\u7121\u5019\u88DC\u8CC7\u6599\uFF0C\u8ACB\u5148\u4E0A\u50B3\u554F\u5377')+'</div>'; return;
+  RV_DUPS = newDups;
+  Object.keys(RV_CHOICES).forEach(function(name){
+    var stillDup=newDups.some(function(d){ return d.name===name; });
+    if(!stillDup) delete RV_CHOICES[name];
+  });
+}
+
+function RVgetRawEntry(name, submit){
+  for(var i=0;i<RV_RAW.length;i++){
+    if(RV_RAW[i].name===name && RV_RAW[i].submit===submit) return RV_RAW[i];
   }
-  var allTimes={},allDays={};
-  Object.keys(slotMap).forEach(function(key){var p=key.split('|');allDays[p[0]]=true;allTimes[p[1]]=true;});
-  var usedDays=DAYS.filter(function(d){return allDays[d];});
-  var usedTimes=Object.keys(allTimes).sort();
-  var col=CLS_COL[cls];
-  var html='<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;width:100%;min-width:500px">'
-    +'<thead><tr style="background:var(--sf);border-bottom:2px solid var(--bd)">'
-    +'<th style="padding:8px 12px;text-align:left;white-space:nowrap;color:var(--tx3)">\u6642\u6BB5</th>';
-  usedDays.forEach(function(d){html+='<th style="padding:8px 12px;text-align:center;font-weight:600">'+d+'</th>';});
-  html+='</tr></thead><tbody>';
-  usedTimes.forEach(function(time,ti){
-    html+='<tr style="border-bottom:1px solid var(--bd);background:'+(ti%2?'var(--sf)':'')+'"><td style="padding:8px 12px;font-weight:600;white-space:nowrap;color:var(--tx2)">'+time+'</td>';
-    usedDays.forEach(function(day){
-      var key=day+'|'+time;
-      var people=slotMap[key]||[];
-      people.sort(function(a,b){return a.rank-b.rank;});
-      if(!people.length){html+='<td style="padding:6px 8px"></td>';return;}
-      html+='<td style="padding:6px 8px;vertical-align:top">';
-      people.forEach(function(p,pi){
-        var bu=p.backup?BACKUP_LABEL[p.backup]||'':'';
-        var buBg=BACKUP_BG[p.backup]||'#f5f5f5';
-        var buCol=BACKUP_COLOR[p.backup]||'#666';
-        html+='<div style="display:inline-flex;align-items:center;gap:3px;margin:2px;padding:3px 7px;border:1.5px solid '+col+';border-radius:12px;background:#fff;white-space:nowrap">'
-          +'<span style="width:16px;height:16px;border-radius:50%;background:'+col+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(pi+1)+'</span>'
-          +'<span style="font-size:12px;font-weight:600">'+p.name+'</span>'
-          +'<span style="font-size:9px;color:'+col+'">\u5FD7'+p.rank+'</span>'
-          +(bu?'<span style="font-size:9px;font-weight:700;color:'+buCol+';background:'+buBg+';padding:1px 4px;border-radius:4px">'+bu+'</span>':'')
-          +'</div>';
-      });
-      html+='</td>';
-    });
-    html+='</tr>';
-  });
-  html+='</tbody></table></div>';
-  bodyEl.innerHTML=html;
+  return null;
 }
 
+function RVdupsDeleteEntry(name, submit){
+  var idx=-1;
+  for(var i=0;i<RV_RAW.length;i++){
+    if(RV_RAW[i].name===name && RV_RAW[i].submit===submit){ idx=i; break; }
+  }
+  if(idx===-1) return;
+  RV_RAW.splice(idx,1);
+  RVrebuildDups();
+  if(RV_CHOICES[name]!=null && RV_CHOICES[name]!==-1){
+    var dup=RV_DUPS.find(function(d){ return d.name===name; });
+    if(!dup || RV_CHOICES[name]>=dup.entries.length) delete RV_CHOICES[name];
+  }
+  RVbuildWL();
+  RVrenderDups();
+}
 
+function RVdupsConfirmDelete(name, submit){
+  if(!confirm("確定刪除「"+name+"」於 "+submit.slice(0,16)+" 的填表記錄？此動作無法復原。")) return;
+  RVdupsDeleteEntry(name, submit);
+}
 
-function RVhandleUpload(e){
-  var file = e.target.files && e.target.files[0];
-  if(!file) return;
-  var status = document.getElementById('rv-upload-status');
-  if(status) status.innerHTML = "<div class='al al-am'>\u23F3 \u89E3\u6790\u4E2D...</div>";
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    try{
-      var wb = XLSX.read(ev.target.result, {type:'array'});
-      var ws = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      if(rows.length < 2){ throw new Error('\u6A94\u6848\u6C92\u6709\u8CC7\u6599'); }
-      var hdr = rows[0].map(function(c){ return String(c||'').trim(); });
-      function cIdx(names){
-        for(var i=0;i<hdr.length;i++){
-          if(names.some(function(n){ return hdr[i].indexOf(n)>=0; })) return i;
-        }
-        return -1;
-      }
-      var iName   = cIdx(['\u5B78\u54E1\u59D3\u540D','\u59D3\u540D']);
-      var iHall   = cIdx(['\u5B78\u54E1\u9928\u5225','\u9928\u5225']);
-      var iPlan   = cIdx(['\u65B9\u6848\u9078\u64C7','\u65B9\u6848']);
-      var iCurCls = cIdx(['\u4F60\u76EE\u524D\u6B63\u5728\u4E0A\u8AB2\u7684\u8AB2\u7A0B\u985E\u5225','\u76EE\u524D\u73ED\u5225','\u8AB2\u7A0B\u985E\u5225']);
-      var iTarget = cIdx(['\u80FD\u529B\u5347\u7D1A\u8981\u63DB\u73ED']);
-      var iBackup = cIdx(['\u82E5\u4EE5\u4E0A\u6642\u6BB5\u7686\u672A\u5019\u88DC\u6210\u529F','\u5F8C\u5099']);
-      var iSubmit = cIdx(['\u586B\u7B54\u6642\u9593','\u586B\u5BEB\u6642\u9593','\u9001\u51FA']);
-      if(iName<0||iHall<0||iPlan<0){ throw new Error('\u627E\u4E0D\u5230\u5FC5\u8981\u6B04\u4F4D'); }
-      var wlCols=[];
-      hdr.forEach(function(h,idx){
-        var m=h.match(/([\u897F\u5317]\u5C6C\u9928)\u3010(.+?)\u73ED\u3011\u5019\u88DC\u9806\u5E8F/);
-        if(m){ wlCols.push({idx:idx, hall:m[1].replace('\u9928',''), cls:m[2].slice(-1), fullCls:m[2]}); }
-      });
-      function parseHall(s){ return s.indexOf('\u897F\u5C6C')>=0?'\u897F\u5C6C':s.indexOf('\u5317\u5C6C')>=0?'\u5317\u5C6C':s; }
-      function parsePlan(s){
-        if(s.indexOf('\u63DB\u73ED')>=0) return 'change';
-        if(s.indexOf('\u4F11\u606F')>=0||s.indexOf("won't")>=0) return 'stop';
-        return 'keep';
-      }
-      function parseBackup(s){
-        if(!s) return '';
-        if(s.indexOf('\u539F\u6642\u6BB5')>=0) return 'keep';
-        if(s.indexOf('\u8001\u5E2B')>=0) return 'teacher';
-        if(s.indexOf('\u6C92\u8FA6\u6CD5')>=0) return 'stop';
-        return '';
-      }
-      function parseCurCls(grp,tgt){
-        if(tgt&&tgt.trim()){
-          var m2=tgt.match(/([A-F])/); if(m2) return m2[1];
-        }
-        if(grp.indexOf('\u89AA\u5B50')>=0) return 'A';
-        if(grp.indexOf('\u5E7C\u5152')>=0) return 'C';
-        if(grp.indexOf('\u5152\u7AE5')>=0) return 'E';
-        return '';
-      }
-      function parseWlText(txt){
-        var lines=String(txt||'').split('\n'), result=[];
-        lines.forEach(function(line){
-          var m3=line.trim().match(/^(\d+)[.\s]+\s*(\u9031[\u4E8C\u4E09\u56DB\u4E94\u516D])\s*(\d{1,2}[.:]\d{2})/);
-          if(m3){ var t=m3[3].replace('.',':'); if(t.length===4)t='0'+t; result.push({rank:parseInt(m3[1]),day:m3[2],time:t}); }
-        });
-        return result;
-      }
-      var newRaw=[];
-      for(var r=1;r<rows.length;r++){
-        var row=rows[r];
-        if(!row[iName]) continue;
-        var name=String(row[iName]).trim(); if(!name) continue;
-        var hall=parseHall(String(row[iHall]||''));
-        var plan=parsePlan(String(row[iPlan]||''));
-        var grp=String(row[iCurCls]||'');
-        var tgt=iTarget>=0?String(row[iTarget]||''):'';
-        var backup=parseBackup(iBackup>=0?String(row[iBackup]||''):'');
-        var submit=iSubmit>=0?String(row[iSubmit]||''):'';
-        var curCls=parseCurCls(grp,tgt);
-        var wls=[];
-        wlCols.forEach(function(wc){
-          var raw_wl=String(row[wc.idx]||'').trim(); if(!raw_wl) return;
-          parseWlText(raw_wl).forEach(function(sl){
-            wls.push({hall:wc.hall,cls:wc.cls,fullCls:wc.fullCls,rank:sl.rank,day:sl.day,time:sl.time});
+function RVdupsSelect(name,idx){ RV_CHOICES[name]=idx; RVrenderDups(); }
+
+function RVdupsExclude(name){ RV_CHOICES[name]=-1; RVrenderDups(); }
+
+function RVdupsReset(name){ delete RV_CHOICES[name]; RVrenderDups(); }
+
+function RVdupsApplyAll(){
+  RVbuildWL(); RVrender(); RVstuRender();
+  var s=document.getElementById("rv-dups-status");
+  if(s) s.textContent += " ✓ 已套用至所有分析";
+}
+
+function RVdupsResetAll(){ RV_CHOICES={}; RVrenderDups(); }
+
+function RVrenderDups(){
+  // Only show duplicates where at least one entry has plan=change
+  // (same-only duplicates don't need manual resolution)
+  var allDups=RV_DUPS;
+  var dups=allDups.filter(function(d){
+    return d.entries.some(function(e){ return e.plan==="change"; });
+  });
+  // Auto-resolve same-only: pick latest (already default, just skip showing them)
+  var sameOnlyCount = allDups.length - dups.length;
+  var unresolved=dups.filter(function(d){ return RV_CHOICES[d.name]==null; }).length;
+  var excluded=dups.filter(function(d){ return RV_CHOICES[d.name]===-1; }).length;
+  var badge=document.getElementById("rv-dups-badge");
+  if(badge) badge.textContent=dups.length; // change-related only
+  var status=document.getElementById("rv-dups-status");
+  if(status) status.textContent="共 "+dups.length+" 人需確認（換班相關）・"+(sameOnlyCount||0)+" 人僅原班重複（已自動保留最新）・"+excluded+" 人已排除";
+
+  window._dupSlotMap={};
+  RV_RAW.forEach(function(e){ window._dupSlotMap[e.name+"||"+e.submit]=e; });
+
+  var html="";
+  dups.forEach(function(d){
+    var choice=RV_CHOICES[d.name];
+    var isExcluded=(choice===-1);
+    var cardCls=isExcluded?"dup-card":(choice!=null?"dup-card resolved":"dup-card conflict");
+    html+="<div class='"+cardCls+"'>";
+    html+="<div style='display:flex;align-items:center;gap:8px;margin-bottom:8px'>";
+    html+="<span style='font-size:13px;font-weight:600'>"+d.name+"</span>";
+    html+="<span class='tag t-am' style='font-size:10px'>"+d.entries.length+"筆</span>";
+    if(isExcluded) html+="<span class='tag t-gy' style='font-size:10px'>已排除</span>";
+    else if(choice!=null) html+="<span class='tag t-tl' style='font-size:10px'>已選定</span>";
+    else html+="<span class='tag t-am' style='font-size:10px'>預設最新</span>";
+    html+="<div style='margin-left:auto;display:flex;gap:4px'>";
+    if(isExcluded) html+="<button class='btn bg sm' style='font-size:11px' onclick='RVdupsReset(\""+d.name+"\")'>恢復</button>";
+    else html+="<button class='btn bg sm' style='font-size:11px' onclick='RVdupsExclude(\""+d.name+"\")'>排除全部</button>";
+    html+="</div></div>";
+    d.entries.forEach(function(e,ei){
+      var isSelected=(!isExcluded)&&((choice==null&&ei===0)||(choice===ei));
+      var entryCls="dup-entry"+(isSelected?" selected":"")+(isExcluded?" excluded":"");
+      var planTag=e.plan==="change"?"<span class='tag t-am' style='font-size:10px'>換班續報</span>":e.plan==="same"?"<span class='tag t-tl' style='font-size:10px'>原班續報</span>":"";
+      var mapKey=d.name+"||"+e.submit;
+      html+="<div class='"+entryCls+" dup-entry-row'";
+      html+=" data-mapkey='"+mapKey.replace(/'/g,"&apos;")+"'";
+      html+=" data-name='"+d.name.replace(/'/g,"&apos;")+"'";
+      html+=" data-submit='"+e.submit+"'";
+      html+=" onclick='RVdupsSelect(\""+d.name+"\","+ei+")'>";
+      html+="<div style='width:16px;height:16px;border-radius:50%;border:2px solid "+(isSelected?"var(--tl)":"var(--bd2)")+";background:"+(isSelected?"var(--tl)":"transparent")+";flex-shrink:0'></div>";
+      html+="<span style='font-family:monospace;font-size:11px;color:var(--tx2)'>"+e.submit.slice(0,16)+"</span>";
+      if(ei===0) html+="<span class='tag t-tl' style='font-size:9px'>最新</span>";
+      html+="<span style='font-size:11px;color:var(--tx3)'>"+e.hall+"</span>";
+      html+=planTag;
+      html+="<button class='btn bg sm' style='margin-left:auto;font-size:10px;color:var(--rd);padding:2px 6px'";
+      html+=" onclick='event.stopPropagation();RVdupsConfirmDelete(\""+d.name+"\",\""+e.submit+"\")'>✕ 刪除</button>";
+      html+="</div>";
+    });
+    html+="</div>";
+  });
+  var body=document.getElementById("rv-dups-body");
+  if(body) body.innerHTML=html||"<div style='text-align:center;color:var(--tx3);padding:24px'>無重複填單</div>";
+  RVattachDupTooltips();
+}
+
+function RVattachDupTooltips(){
+  var tip=document.getElementById("dup-tip");
+  if(!tip){
+    tip=document.createElement("div");
+    tip.id="dup-tip";
+    tip.style.cssText="display:none;position:fixed;z-index:600;background:var(--sf);border:1px solid var(--bd2);border-radius:var(--rl);padding:12px 16px;box-shadow:0 4px 24px rgba(0,0,0,.18);width:300px;font-size:12px;pointer-events:none;line-height:1.6";
+    document.body.appendChild(tip);
+  }
+  function pc(r){ return r===1?"var(--tl)":r===2?"var(--bl)":r===3?"var(--am)":"var(--tx3)"; }
+  document.querySelectorAll(".dup-entry-row").forEach(function(el){
+    el.addEventListener("mouseenter",function(){
+      var mapKey=el.dataset.mapkey;
+      var raw=window._dupSlotMap?window._dupSlotMap[mapKey]:null;
+      var th="<div style='font-weight:700;font-size:13px;margin-bottom:4px'>"+el.dataset.name+"</div>";
+      th+="<div style='font-size:11px;color:var(--tx3);margin-bottom:10px;font-family:monospace'>"+el.dataset.submit.slice(0,16)+"</div>";
+      if(raw&&raw.wls&&raw.wls.length){
+        th+="<div style='font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:6px'>候補志願班別與時段</div>";
+        raw.wls.forEach(function(wl){
+          th+="<div style='margin-bottom:8px'>";
+          th+="<div style='font-size:11px;font-weight:700;color:var(--tx);background:var(--sf2);padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block'>"+wl.hall+wl.class+"</div>";
+          wl.slots.forEach(function(s){
+            th+="<div style='display:flex;align-items:center;gap:6px;padding:1px 0'>";
+            th+="<span style='font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;background:"+(s.rank===1?"var(--tl-bg)":s.rank===2?"var(--bl-bg)":s.rank===3?"var(--am-bg)":"var(--gy)")+";color:"+pc(s.rank)+"'>志"+s.rank+"</span>";
+            th+="<span style='color:var(--tx2)'>"+s.slot+"</span></div>";
           });
+          th+="</div>";
         });
-        wls.sort(function(a,b){return a.rank-b.rank;});
-        newRaw.push({name:name,hall:hall,plan:plan,cur_cls:curCls,cur_group:grp,backup:backup,submit:submit,wls:wls,payDone:false});
+      } else {
+        th+="<div style='font-size:11px;color:var(--tx3);padding:8px 0'>此筆無候補班別志願</div>";
       }
-      RV_RAW=newRaw;
-      try{ localStorage.setItem('crm_rv_raw_'+_curSeason,JSON.stringify(RV_RAW)); localStorage.setItem('crm_rv_raw',JSON.stringify(RV_RAW)); }catch(ex){}
-      if(status) status.innerHTML="<div class='al al-ok'>\u2713 \u5DF2\u532F\u5165 "+newRaw.length+" \u7B46\u554F\u5377\u8CC7\u6599</div>";
+      tip.innerHTML=th;
+      tip.style.display="block";
+      var rect=el.getBoundingClientRect();
+      var sbEl=document.querySelector(".sidebar");
+      var sbRight=sbEl?sbEl.getBoundingClientRect().right:0;
+      var left=rect.right+12;
+      if(left+310>window.innerWidth-8) left=rect.left-320;
+      if(left<sbRight+8) left=sbRight+8;
+      var top=rect.top;
+      if(top+350>window.innerHeight-8) top=window.innerHeight-358;
+      if(top<60) top=60;
+      tip.style.left=left+"px";
+      tip.style.top=top+"px";
+    });
+    el.addEventListener("mouseleave",function(){
+      tip.style.display="none";
+    });
+  });
+}
+
+function RVhandleUpload(evt){
+  var file=evt.target.files[0];
+  if(!file) return;
+  var status=document.getElementById("rv-upload-status");
+  status.innerHTML="<div class='al al-am'>⏳ 正在解析 "+file.name+"...</div>";
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=new Uint8Array(e.target.result);
+      if(typeof XLSX==="undefined"){status.innerHTML="<div class='al al-rd'>❌ 需要載入 SheetJS 函式庫。</div>";return;}
+      var wb=XLSX.read(data,{type:"array",cellDates:true});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:"yyyy-mm-dd hh:mm:ss"});
+      var WL_COLS={12:["西屯","親子A"],13:["北屯","親子A"],14:["西屯","親子B"],15:["北屯","親子B"],
+        16:["西屯","幼兒C"],17:["北屯","幼兒C"],18:["西屯","幼兒D"],19:["北屯","幼兒D"],
+        20:["西屯","兒童E"],21:["北屯","兒童E"],22:["西屯","兒童F"],23:["北屯","兒童F"]};
+      function normSlot(s){s=(s||"").toString().trim();var m=s.match(/^(週[二三四五六])\s*(\d{1,2}):(\d{2})/);return m?m[1]+" "+m[2].padStart(2,"0")+":"+m[3]:s;}
+      function parseSlots(text){if(!text)return[];var slots=[];text.toString().split("\n").forEach(function(line){var m=line.trim().match(/^(\d+)[.\s]+(.+)/);if(m)slots.push({rank:parseInt(m[1]),slot:normSlot(m[2].trim())});});return slots;}
+      var newRaw=[];
+      rows.slice(1).forEach(function(r){
+        if(!r[0])return;
+        var wls=[];
+        Object.keys(WL_COLS).forEach(function(ci){ci=parseInt(ci);if(!r[ci])return;var slots=parseSlots(r[ci]);if(slots.length)wls.push({hall:WL_COLS[ci][0],class:WL_COLS[ci][1],slots:slots});});
+        var hallRaw=(r[1]||"").toString();
+        var planRaw=((r[4]||"").toString())+((r[5]||"").toString());
+        var fbRaw=(r[24]||"").toString();
+        newRaw.push({
+          name:(r[0]||"").toString().trim(),
+          hall:hallRaw.indexOf("西屯")>=0?"西屯":hallRaw.indexOf("北屯")>=0?"北屯":"",
+          plan:planRaw.indexOf("換班")>=0?"change":planRaw.indexOf("原班")>=0?"same":planRaw.indexOf("休息")>=0?"rest":"unknown",
+          submit:(r[27]||"").toString(),
+          fallback:fbRaw.indexOf("老師幫忙")>=0?"請老師幫忙":fbRaw.indexOf("原時段")>=0?"回到原時段":fbRaw.indexOf("沒辦法")>=0?"無法續報":"",
+          cur_cls:(r[2]||"").toString().replace("游泳","").replace("．","/").trim(),
+          wls:wls
+        });
+      });
+      var byName={};
+      newRaw.forEach(function(e){if(!byName[e.name])byName[e.name]=[];byName[e.name].push(e);});
+      var newDups=[];
+      Object.keys(byName).forEach(function(name){var entries=byName[name];if(entries.length<2)return;entries.sort(function(a,b){return a.submit>b.submit?-1:1;});newDups.push({name:name,entries:entries.map(function(e){return{submit:e.submit,hall:e.hall,plan:e.plan};}),resolved:null});});
+      RV_RAW=newRaw; RV_DUPS=newDups; RV_CHOICES={};
+      RVbuildWL();
+      var total=0; Object.keys(RV_WL).forEach(function(k){total+=RV_WL[k].length;});
+      status.innerHTML="<div class='al al-tl'>✓ 成功載入 <strong>"+newRaw.length+"</strong> 筆回覆，"+newDups.length+" 人重複填單，候補人次共 "+total+"。</div>";
+      var badge=document.getElementById("rv-dups-badge"); if(badge)badge.textContent=newDups.length;
       RVinit();
-    }catch(ex){
-      console.error('RVhandleUpload error:',ex);
-      if(status) status.innerHTML="<div class='al al-rd'>\u2717 \u89E3\u6790\u5931\u6557\uFF1A"+ex.message+"</div>";
-    }
+    }catch(err){status.innerHTML="<div class='al al-rd'>❌ 解析失敗："+err.message+"</div>";}
   };
   reader.readAsArrayBuffer(file);
-  e.target.value='';
 }
+
+function RVinit(){
+  RVbuildWL();
+
+  // ── Stats from RV_RAW ──────────────────────────────────────────────────
+  var xChange=0, xSame=0, xRest=0, bChange=0, bSame=0, bRest=0;
+  RV_RAW.forEach(function(e){
+    if(e.hall==="西屯"){
+      if(e.plan==="change") xChange++;
+      else if(e.plan==="same") xSame++;
+      else if(e.plan==="rest") xRest++;
+    } else if(e.hall==="北屯"){
+      if(e.plan==="change") bChange++;
+      else if(e.plan==="same") bSame++;
+      else if(e.plan==="rest") bRest++;
+    }
+  });
+  var total = RV_RAW.length;
+  var totalChange = xChange+bChange, totalSame = xSame+bSame, totalRest = xRest+bRest;
+
+  // Stat cards
+  function setEl(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
+  setEl("rv-stat-total",   total);
+  setEl("rv-stat-same",    totalSame);
+  setEl("rv-stat-same-x",  xSame);
+  setEl("rv-stat-same-b",  bSame);
+  setEl("rv-stat-change",  totalChange);
+  setEl("rv-stat-change-x",xChange);
+  setEl("rv-stat-change-b",bChange);
+  setEl("rv-stat-rest",    totalRest);
+  setEl("rv-stat-rest-x",  xRest);
+  setEl("rv-stat-rest-b",  bRest);
+
+  // Show wl tab by default, activate its button
+  ["wl","stu","heat","grid","dups","upload"].forEach(function(t){
+    var x=document.getElementById("rv-"+t);
+    if(x) x.style.display=(t==="wl")?"":"none";
+  });
+  document.querySelectorAll("#rv-ptabs .ptab").forEach(function(t){t.classList.remove("active");});
+  var wlTab=document.getElementById("rv-tab-wl");
+  if(wlTab) wlTab.classList.add("active");
+  RVrender();
+  RVstuRender();
+  RVrenderDups();
+}
+
+function RVtab(name,el){
+  // Hide all sub-panels
+  ["wl","stu","heat","grid","dups","upload"].forEach(function(t){
+    var x=document.getElementById("rv-"+t);
+    if(x) x.style.display="none";
+  });
+  // Show target
+  var target=document.getElementById("rv-"+name);
+  if(target) target.style.display="";
+  // Update active tab
+  document.querySelectorAll("#rv-ptabs .ptab").forEach(function(t){t.classList.remove("active");});
+  if(el) el.classList.add("active");
+  // Render content
+  if(name==="wl")   RVrender();
+  if(name==="stu")  RVstuRender();
+  if(name==="heat") RVheat();
+  if(name==="grid") RVgrid();
+  if(name==="dups") RVrenderDups();
+}
+
+function RVgetKeys(){
+  var hall=document.getElementById("rv-hall").value;
+  var cls=document.getElementById("rv-cls").value;
+  return Object.keys(RV_WL).filter(function(k){
+    if(hall&&k.indexOf(hall)!==0) return false;
+    if(cls&&k.indexOf(cls)<0) return false;
+    return true;
+  }).sort(function(a,b){
+    var ha=a.slice(0,2),hb=b.slice(0,2),ca=a.slice(2),cb=b.slice(2);
+    if(ha!==hb) return ha<hb?-1:1;
+    return CLS_ORD.indexOf(ca)-CLS_ORD.indexOf(cb);
+  });
+}
+
+function RVrender(){
+  var keys=RVgetKeys();
+  var listH="";
+  keys.forEach(function(key){
+    var lst=RV_WL[key],hall=key.slice(0,2),cls=key.slice(2),cnt=lst.length;
+    var isA=key===_rvCls?" active":"";
+    listH+="<div class=\'cls-item"+isA+"\' data-cls=\'"+key+"\' style=\'cursor:pointer\'><span class=\'tag "+(HCL[hall]||"t-gy")+"\' style=\'font-size:10px\'>"+hall+"</span><span class=\'ci-nm\'>"+cls+"</span><span class=\'ci-cnt"+(cnt>=20?" hot":"")+"\'>"+cnt+"</span></div>";
+  });
+  document.getElementById("rv-cls-list").innerHTML=listH||"<div style=\'padding:20px;text-align:center;color:var(--tx3);font-size:13px\'>無資料</div>";
+  if(_rvCls) RVwlPanel(_rvCls);
+  else document.getElementById("rv-wl-pn").innerHTML="<div style=\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--tx3);font-size:13px\'>← 選擇左側班別查看候補名單</div>";
+}
+
+function RVfbTag(fb){
+  if(fb==="請老師幫忙") return "<span class=\'tag t-am\' style=\'font-size:10px\'>請老師</span>";
+  if(fb==="回到原時段") return "<span class=\'tag t-tl\' style=\'font-size:10px\'>回原班</span>";
+  if(fb==="無法續報") return "<span class=\'tag t-rd\' style=\'font-size:10px\'>無法續報</span>";
+  return "";
+}
+
+function RVwlPanel(key){
+  var lst=RV_WL[key];
+  if(!lst||!lst.length){document.getElementById("rv-wl-pn").innerHTML="<div style=\'padding:20px;text-align:center;color:var(--tx3)\'>無候補資料</div>";return;}
+  var hall=key.slice(0,2),cls=key.slice(2);
+  var slotG={};
+  lst.forEach(function(item){
+    (item.slots||[]).forEach(function(s){
+      if(!slotG[s.slot]) slotG[s.slot]=[];
+      slotG[s.slot].push({name:item.name,home:item.home,pref:s.rank,submit:item.submit,fallback:item.fallback});
+    });
+  });
+  Object.keys(slotG).forEach(function(slot){slotG[slot].sort(function(a,b){if(a.pref!==b.pref)return a.pref-b.pref;return a.submit<b.submit?-1:1;});});
+  var slots=Object.keys(slotG).sort(function(a,b){return a<b?-1:1;});
+  var h="<div class=\'wl-hd\'><div style=\'font-size:15px;font-weight:700\'>"+hall+"館【"+cls+"班】候補名單</div><span class=\'tag "+(HCL[hall]||"t-gy")+"\'>"+hall+"</span><span class=\'tag "+(CLS_TC[cls]||"t-gy")+"\'>"+cls+"</span><span style=\'font-size:12px;color:var(--tx3)\'>共 "+lst.length+" 人報名候補</span></div>";
+  h+="<div style=\'display:flex;align-items:center;padding:6px 16px;background:var(--sf2);font-size:11px;font-weight:500;color:var(--tx3);border-bottom:1px solid var(--bd)\'><div style=\'width:24px;flex-shrink:0\'>順</div><div style=\'flex:0 0 72px\'>姓名</div><div style=\'flex:0 0 36px\'>館</div><div style=\'flex:1\'>志願序</div><div style=\'flex:0 0 130px;text-align:right\'>填單時間</div><div style=\'flex:0 0 72px;text-align:right\'>後備</div></div>";
+  h+="<div class=\'wl-bd\'>";
+  slots.forEach(function(slot){
+    var grp=slotG[slot];
+    h+="<div class=\'slot-grp\'><div class=\'slot-hd\'><span class=\'slot-time\'>"+slot+"</span><span class=\'slot-cnt\'>"+grp.length+" 人候補</span></div>";
+    grp.forEach(function(p,i){
+      h+="<div class=\'slot-row\'><div class=\'r-rank\'>"+(i===0?"<strong style=\'color:var(--tl)\'>1</strong>":i+1)+"</div>";
+      h+="<div class=\'r-name\'>"+p.name+"</div><div class=\'r-home\'><span class=\'tag "+(HCL[p.home]||"t-gy")+"\' style=\'font-size:10px\'>"+p.home+"</span></div>";
+      h+="<div class=\'r-pref\'>第 "+p.pref+" 志願</div><div class=\'r-time\'>"+(p.submit?p.submit.slice(5,16):"--")+"</div><div class=\'r-fb\'>"+RVfbTag(p.fallback)+"</div></div>";
+    });
+    h+="</div>";
+  });
+  h+="</div>";
+  document.getElementById("rv-wl-pn").innerHTML=h;
+}
+
+function RVstuRender(){
+  var q=(document.getElementById("rv-q").value||"").toLowerCase();
+  var fp=document.getElementById("rv-plan").value;
+  var fh=document.getElementById("rv-hall2").value;
+  var data=RV_RAW.filter(function(e){
+    if(q&&e.name.toLowerCase().indexOf(q)<0) return false;
+    if(fp&&e.plan!==fp) return false;
+    if(fh&&e.hall!==fh) return false;
+    return true;
+  });
+  function planTag(p){if(p==="change")return "<span class=\'tag t-am\'>換班續報</span>";if(p==="same")return "<span class=\'tag t-tl\'>原班續報</span>";if(p==="rest")return "<span class=\'tag t-rd\'>不續報</span>";return "<span class=\'tag t-gy\'>--</span>";}
+  function fbTag(fb){if(fb==="請老師幫忙")return "<span style=\'font-size:12px;color:var(--am)\'>請老師</span>";if(fb==="回到原時段")return "<span style=\'font-size:12px;color:var(--tl)\'>回原班</span>";if(fb==="無法續報")return "<span style=\'font-size:12px;color:var(--rd)\'>無法續報</span>";return "--";}
+  var html="";
+  data.forEach(function(e,idx){
+    var volH="--";
+    if(e.wls&&e.wls.length){
+      var parts2=[];
+      e.wls.forEach(function(wl){
+        var ss=wl.slots.map(function(s){return s.rank+"."+s.slot;}).join("、");
+        parts2.push("<span class=\'tag "+(CLS_TC[wl.class]||"t-gy")+"\' style=\'margin-right:2px\'>"+wl.hall+wl.class+"</span><span style=\'font-size:11px;color:var(--tx2)\'>"+ss+"</span>");
+      });
+      volH=parts2.join("<br>");
+    }
+    html+="<tr>";
+    html+="<td style=\'font-family:monospace;font-size:11px;color:var(--tx3)\'>"+(idx+1)+"</td>";
+    html+="<td><div class=\'tn\'>"+e.name+"</div></td>";
+    html+="<td><span class=\'tag "+(HCL[e.hall]||"t-gy")+"\' style=\'font-size:11px\'>"+e.hall+"</span></td>";
+    html+="<td style=\'font-size:12px;color:var(--tx2)\'>"+(e.cur_cls||"--")+"</td>";
+    html+="<td>"+planTag(e.plan)+"</td>";
+    html+="<td style=\'line-height:1.8\'>"+volH+"</td>";
+    html+="<td>"+fbTag(e.fallback)+"</td>";
+    html+="<td style=\'font-size:11px;font-family:monospace;color:var(--tx3)\'>"+(e.submit?e.submit.slice(5,16):"--")+"</td>";
+    html+="</tr>";
+  });
+  document.getElementById("rv-stu-body").innerHTML=html||"<tr><td colspan=\'8\' style=\'text-align:center;padding:20px;color:var(--tx3)\'>無符合條件的資料</td></tr>";
+}
+
+function RVheat(){
+  var halls=["西屯","北屯"];
+  var html="";
+  halls.forEach(function(hall){
+    html+="<div style=\'margin-bottom:24px\'><div style=\'font-size:14px;font-weight:600;margin-bottom:12px;color:var(--tx)\'>"+hall+"館 — 各班時段候補需求</div>";
+    CLS_ORD.forEach(function(cls){
+      var key=hall+cls,lst=RV_WL[key];
+      if(!lst||!lst.length) return;
+      var sc2=RV_SC[key]||{};
+      var sorted=Object.entries(sc2).sort(function(a,b){return b[1]-a[1];});
+      var maxV=sorted[0]?sorted[0][1]:1;
+      html+="<div style=\'background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:14px 16px;margin-bottom:10px\'>";
+      html+="<div style=\'display:flex;align-items:center;gap:8px;margin-bottom:10px\'><span class=\'tag "+(CLS_TC[cls]||"t-gy")+"\' style=\'font-size:12px\'>"+cls+"班</span><span style=\'font-size:12px;color:var(--tx3)\'>"+lst.length+" 人候補</span></div>";
+      html+="<div style=\'display:flex;flex-direction:column;gap:5px\'>";
+      sorted.forEach(function(entry){
+        var slot=entry[0],cnt=entry[1],p=Math.round(cnt/maxV*100);
+        var bc2=cnt>=8?"var(--rd)":cnt>=5?"var(--am)":"var(--tl)";
+        html+="<div style=\'display:flex;align-items:center;gap:10px\'><div style=\'font-size:12px;font-family:monospace;color:var(--tx2);width:110px;flex-shrink:0\'>"+slot+"</div>";
+        html+="<div style=\'flex:1;height:16px;background:var(--sf2);border-radius:10px;overflow:hidden\'><div style=\'height:100%;width:"+p+"%;background:"+bc2+";border-radius:10px\'></div></div>";
+        html+="<div style=\'font-size:12px;font-family:monospace;color:var(--tx);width:20px;text-align:right\'>"+cnt+"</div></div>";
+      });
+      html+="</div></div>";
+    });
+    html+="</div>";
+  });
+  document.getElementById("rv-heat-body").innerHTML=html;
+}
+
+function RVgrid(){
+  var hall    = document.getElementById("rv-grid-hall").value;
+  var cls     = document.getElementById("rv-grid-cls").value;
+  var search  = (document.getElementById("rv-grid-search").value||"").trim();
+  var key     = hall + cls;
+
+  // ── Build slot->people map ─────────────────────────────────────────────
+  // If search mode: collect across ALL classes for this hall (or all halls)
+  var isSearch = search.length >= 1;
+  var srcKeys  = isSearch
+    ? Object.keys(RV_WL).filter(function(k){
+        return !hall || k.indexOf(hall)===0;
+      })
+    : [key];
+
+  var grid = {}; // slot -> [{name,home,slot_rank,submit,slots_all,fallback,cls_label}]
+  srcKeys.forEach(function(k){
+    var lst = RV_WL[k] || [];
+    var clsLabel = k.slice(2); // e.g. "親子A"
+    lst.forEach(function(item){
+      if(isSearch && item.name.indexOf(search)<0) return;
+      item.slots.forEach(function(s){
+        if(!grid[s.slot]) grid[s.slot]=[];
+        grid[s.slot].push({
+          name:      item.name,
+          home:      item.home,
+          slot_rank: s.rank,
+          submit:    item.submit,
+          slots_all: item.slots,
+          fallback:  item.fallback,
+          cls_label: clsLabel,
+          hall_label: k.slice(0,2)
+        });
+      });
+    });
+  });
+
+  // Sort each cell by submit time
+  Object.keys(grid).forEach(function(slot){
+    grid[slot].sort(function(a,b){ return a.submit<b.submit?-1:1; });
+  });
+
+  // ── Always show ALL days and ALL times ────────────────────────────────
+  var days = DAYS.slice(); // ['週二','週三','週四','週五','週六']
+
+  // Row: always all 24 timeslots; skip row only if ALL cells empty AND not isSearch
+  // (in search mode show all so user sees the full week layout)
+  var h = "<div style='overflow-x:auto'>";
+  h += "<table class='rv-grid-tbl'><thead><tr>";
+  h += "<th class='rv-th-time'>時段</th>";
+  days.forEach(function(d){ h += "<th class='rv-th-day'>"+d+"</th>"; });
+  h += "</tr></thead><tbody>";
+
+  TIMES.forEach(function(time){
+    // Check if any cell has data (for non-search mode, skip fully empty rows)
+    var rowHasData = days.some(function(day){
+      return grid[day+" "+time] && grid[day+" "+time].length>0;
+    });
+    if(!rowHasData && !isSearch) return;
+
+    h += "<tr><td class='rv-td-time'>"+time+"</td>";
+    days.forEach(function(day){
+      var slot   = day+" "+time;
+      var people = grid[slot]||[];
+      if(!people.length){
+        h += "<td class='rv-td-empty'></td>";
+      } else {
+        var top3 = people.slice(0,3);
+        var rest = people.slice(3);
+        h += "<td class='rv-td-cell'>";
+        // Always two-column layout: left half + right half
+        // right half is empty if ≤3 people
+        h += "<div style='display:flex;gap:0'>";
+
+        // LEFT col (rank 1-3)
+        h += "<div style='flex:1;min-width:0;padding-right:2px'>";
+        top3.forEach(function(p,i){ h += buildPerson(p,i,isSearch); });
+        h += "</div>";
+
+        // RIGHT col (rank 4+ or empty)
+        h += "<div style='flex:1;min-width:0;padding-left:2px;border-left:1.5px solid var(--bd2)'>";
+        rest.forEach(function(p,i){ h += buildPerson(p,i+3,isSearch); });
+        h += "</div>";
+
+        h += "</div></td>";
+      }
+    });
+    h += "</tr>";
+  });
+  h += "</tbody></table></div>";
+
+  // Tooltip div
+  h += "<div id='rv-grid-tip' style='display:none;position:fixed;z-index:500;background:var(--sf);border:1px solid var(--bd2);border-radius:var(--rl);padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:230px;max-width:300px;font-size:12px;pointer-events:none'></div>";
+
+  document.getElementById("rv-grid-body").innerHTML = h;
+  attachGridTooltips();
+}
+
 </script>
 </body>
 </html>
