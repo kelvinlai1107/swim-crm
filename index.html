@@ -3946,17 +3946,26 @@ function RVtrialImport(hall, slotIdx){
 
   // Load previous season slots
   var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-  var seasons=['S1','S2','S3'].filter(function(s){return s!==_curSeason;});
+  // 只帶上一季（依 S1→S2→S3 順序往前一個），不是「所有非目前學期」——
+  // 目前在 26S3 只該看到 26S2 的班，不用看到 26S1
+  var SEASON_ORDER=['S1','S2','S3'];
+  var _curSeasonIdx=SEASON_ORDER.indexOf(_curSeason);
+  var seasons = _curSeasonIdx>0 ? [SEASON_ORDER[_curSeasonIdx-1]] : [];
 
-  // Build source slot list from all previous seasons
+  // Build source slot list from the previous season
   function getPrevSlots(s, h){
+    // 優先讀該學期實際存的 localStorage（使用者編輯過的最新課表）；S2 才會在
+    // 完全沒存過的情況下退回 HTML 內建的原始 S2 種子資料當備援，跟
+    // _loadSeasonData() 的邏輯一致，避免明明 S2 已經被編輯過、這裡卻還是
+    // 帶出最一開始沒改過的舊版班表
+    try{
+      var saved=localStorage.getItem('crm_slots_'+(h==='X'?'x':'b')+'_'+s);
+      if(saved) return JSON.parse(saved);
+    }catch(e){}
     if(s==='S2'){
       return h==='X'?(_baseSlotX?JSON.parse(JSON.stringify(_baseSlotX)):[]):(_baseSlotB?JSON.parse(JSON.stringify(_baseSlotB)):[]);
     }
-    try{
-      var saved=localStorage.getItem('crm_slots_'+(h==='X'?'x':'b')+'_'+s);
-      return saved?JSON.parse(saved):[];
-    }catch(e){return [];}
+    return [];
   }
 
   // Collect all source slots with students
