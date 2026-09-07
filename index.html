@@ -2244,7 +2244,7 @@ function stuParseExcel(file, hallName, hallCode){
         var students = [];
         for(var ri=1;ri<rows1.length;ri++){
           var row = rows1[ri];
-          if(!row[5]) continue;
+          if(!(row[5]||'').toString().trim()) continue;
           var hist = [];
           for(var si=0;si<seasonCols.length;si++){
             var sc = seasonCols[si];
@@ -2274,10 +2274,13 @@ function stuParseExcel(file, hallName, hallCode){
           var rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, raw:false, defval:''});
           for(var ri2=2;ri2<rows2.length;ri2++){
             var r2=rows2[ri2];
-            if(!r2[6]) continue;
+            // 劃位名單(勿改) 會預留該班尚未收到學員的空白列（姓名欄可能只有空白字元），
+            // 這些空位不算一個學員，必須用 trim 後的值判斷，不能只看是否為 falsy
+            var nm2 = (r2[6]||'').toString().trim();
+            if(!nm2) continue;
             seating.push({
               order:r2[0], teacher:r2[1], day:r2[2], time:r2[3], cls:r2[4],
-              parent:r2[5], name:r2[6], dob:(r2[7]||'').split(' ')[0],
+              parent:r2[5], name:nm2, dob:(r2[7]||'').split(' ')[0],
               total_s:r2[8], seasons:r2[9], phone:r2[10],
               age_upg:r2[11], special:r2[12], upgrade:r2[13], upg_note:r2[14]
             });
