@@ -1224,21 +1224,20 @@ function seasonInit(){
     if(saved && SLB[saved]) _curSeason = saved;
   }catch(e){}
 
-  // Persist S2 base to localStorage so copy function can always access it
-  try{
-    if(!localStorage.getItem('crm_slots_x_S2') && _baseSlotX && _baseSlotX.length)
-      localStorage.setItem('crm_slots_x_S2', JSON.stringify(_baseSlotX));
-    if(!localStorage.getItem('crm_slots_b_S2') && _baseSlotB && _baseSlotB.length)
-      localStorage.setItem('crm_slots_b_S2', JSON.stringify(_baseSlotB));
-  }catch(e){}
+  // Note: S2 base will be saved after _ensureSlotCols so col fields are included
   // Load season data
   _loadSeasonData(_curSeason);
   _ensureSlotCols(SLOTS_X);
   _ensureSlotCols(SLOTS_B);
-  // Save immediately so col fields persist before first drag
+  // Save immediately so col fields persist (including S2 base for copy function)
   try{
     localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
     localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+    // Also update S2 base if current season is S2
+    if(_curSeason==='S2'){
+      localStorage.setItem('crm_slots_x_S2', JSON.stringify(SLOTS_X));
+      localStorage.setItem('crm_slots_b_S2', JSON.stringify(SLOTS_B));
+    }
   }catch(e){}
   _updateSeasonUI();
 }
@@ -2490,12 +2489,14 @@ function cmRender(){
         for(var si=0;si<SUBCOLS;si++){
           // Find slot at this col position
           var slAtCol=null;
-          for(var ci=0;ci<ds.length;ci++){ if((ds[ci].col!==undefined?ds[ci].col:999)===si){ slAtCol=ds[ci]; break; } }
-          // Fallback: if no slot has this col, check if any unclaimed slot exists
-          if(!slAtCol){
-            var claimed=[];
-            for(var ci2=0;ci2<ds.length;ci2++) if(ds[ci2].col!==undefined) claimed.push(ds[ci2].col);
-            // Don't auto-assign - leave empty if col doesn't match
+          var anyHasCol=false;
+          for(var ci=0;ci<ds.length;ci++){ if(ds[ci].col!==undefined){ anyHasCol=true; break; } }
+          if(anyHasCol){
+            // col-aware mode: find slot where col===si
+            for(var ci=0;ci<ds.length;ci++){ if(ds[ci].col===si){ slAtCol=ds[ci]; break; } }
+          } else {
+            // fallback: no col fields yet, use array index
+            slAtCol = ds[si] || null;
           }
           t+=cellHTML(slAtCol, d, time, si);
         }
