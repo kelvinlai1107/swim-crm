@@ -2332,8 +2332,17 @@ function stuDoImport(){
     // Save to localStorage
     try{
       localStorage.setItem('crm_students', JSON.stringify(STU));
-      localStorage.setItem('crm_seat_x',   JSON.stringify(SEAT_X));
-      localStorage.setItem('crm_seat_b',   JSON.stringify(SEAT_B));
+      // 劃位表資料（SEAT_X/SEAT_B）重新整理後實際是由 seasonInit()→_loadSeasonData()
+      // 用「crm_seat_x_<季別>」這組季別後綴 key 讀回來的，不是這裡舊版存的
+      // 「crm_seat_x」無後綴 key。只存無後綴 key 的話，重新整理時登入流程跑完會
+      // 呼叫 seasonInit()，找不到對應季別的存檔就整個蓋掉／清空，資料看起來就不見了。
+      // 這裡改成同時用 _saveCurrentSeason() 存進目前季別（_curSeason）對應的 key。
+      if(typeof _saveCurrentSeason === "function"){
+        _saveCurrentSeason();
+      } else {
+        localStorage.setItem('crm_seat_x', JSON.stringify(SEAT_X));
+        localStorage.setItem('crm_seat_b', JSON.stringify(SEAT_B));
+      }
       localStorage.setItem('crm_cur_season', CUR_SEASON);
     } catch(e){ console.warn('localStorage save failed:', e); }
 
