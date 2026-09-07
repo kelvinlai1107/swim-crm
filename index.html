@@ -2313,6 +2313,39 @@ function cmExecuteCopy(){
   }
 }
 
+// ── 班級管理：拖曳移動班次 ──────────────────────────────────────────────────
+var _cmDragHall = null, _cmDragIdx = -1;
+
+function cmDragStart(e, hall, idx){
+  _cmDragHall = hall;
+  _cmDragIdx  = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', hall+'|'+idx);
+}
+
+function cmDrop(e, day, time){
+  e.preventDefault();
+  if(_cmDragHall === null || _cmDragIdx < 0) return;
+  var slots = _cmDragHall==='X' ? SLOTS_X : SLOTS_B;
+  var sl = slots[_cmDragIdx];
+  if(!sl){ _cmDragHall=null; _cmDragIdx=-1; return; }
+
+  // Check if target slot (same day+time on same hall) already has 2 classes (SUBCOLS)
+  var SUBCOLS = _cmDragHall==='B' ? 3 : 2;
+  var existing = slots.filter(function(s){ return s.day===day && s.time===time; });
+  if(existing.length >= SUBCOLS){
+    alert('該時段已達班次上限（'+SUBCOLS+'班），無法移入');
+    _cmDragHall=null; _cmDragIdx=-1; return;
+  }
+
+  // Move: update day and time on the dragged slot
+  sl.day  = day;
+  sl.time = time;
+  cmSaveLocal();
+  cmRender();
+  _cmDragHall=null; _cmDragIdx=-1;
+}
+
 function cmRender(){
   var slots = cmGetSlots();
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
@@ -2346,6 +2379,9 @@ function cmRender(){
   function cellHTML(sl, day, time){
     if(!sl){
       return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e8e8e8;background:#f9f9f9;cursor:pointer;vertical-align:middle;text-align:center" '+
+        'ondragover="event.preventDefault();this.style.background=\'#E3F2FD\';" '+
+        'ondragleave="this.style.background=\'#f9f9f9\'" '+
+        'ondrop="cmDrop(event,\''+day+'\',\''+time+'\');this.style.background=\'#f9f9f9\'" '+
         'onclick="cmOpenAddAt(\''+day+'\',\''+time+'\')">'+
         '<span style="color:#ccc;font-size:18px;line-height:1">＋</span></td>';
     }
