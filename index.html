@@ -2389,7 +2389,7 @@ function cmRender(){
     var bg=CC[sl.cls]||'#eee', fg=FG[sl.cls]||'#333';
     var filled=sl.students.filter(function(s){return !s.empty;}).length;
     var cap=sl.students.length;
-    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0;cursor:pointer" onclick="cmOpenEdit('+idx+')">';
+    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0;cursor:grab" draggable="true" ondragstart="cmDragStart(event,\''+_cmHall+'\','+idx+')" onclick="cmOpenEdit('+idx+')">';
     // Simple cell: class badge + teacher only
     h+='<div style="background:'+bg+';padding:6px 4px;display:flex;align-items:center;justify-content:center;gap:4px">';
     h+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+sl.cls+'</span>';
