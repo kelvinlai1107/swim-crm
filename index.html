@@ -1198,8 +1198,13 @@ var _baseSeatX = null;
 var _baseSeatB = null;
 
 function _ensureSlotCols(slots){
-  // Assign col index to slots that don't have one
-  // Group by day+time, assign col=0,1,2... in current order
+  // 依 day+time 分組，一律重新編號成連續的 0..n-1（不是只補 col===undefined 的）。
+  // 舊版只補「從沒設定過」的欄位：只要同一個 day+time 曾經因為任何原因（拖曳、
+  // 複製課表、重複點「+」新增等）疊到超過畫面欄數（西屯2欄/北屯3欄），多出來的
+  // 班次會拿到超出範圍的 col 值，格子上永遠排不進去、也顯示不出來——使用者會覺得
+  // 這個班次「消失了」，其實資料還在，只是變成 UI 找不到的孤兒列。
+  // 這裡改成每次都依現有 col（沒有的視為最後）排序後，整組重新編號，確保 col 永遠
+  // 是連續、不重複、從 0 開始，讓 cmRender() 的動態 SUBCOLS 一定能把每一列都排出來。
   var groups={};
   slots.forEach(function(sl){
     var key=sl.day+'|'+sl.time;
@@ -1207,9 +1212,11 @@ function _ensureSlotCols(slots){
     groups[key].push(sl);
   });
   Object.keys(groups).forEach(function(k){
-    groups[k].forEach(function(sl,i){
-      if(sl.col===undefined) sl.col=i;
+    groups[k].sort(function(a,b){
+      var ca=a.col!==undefined?a.col:999, cb=b.col!==undefined?b.col:999;
+      return ca-cb;
     });
+    groups[k].forEach(function(sl,i){ sl.col=i; });
   });
 }
 
@@ -1912,8 +1919,13 @@ var _baseSeatX = null;
 var _baseSeatB = null;
 
 function _ensureSlotCols(slots){
-  // Assign col index to slots that don't have one
-  // Group by day+time, assign col=0,1,2... in current order
+  // 依 day+time 分組，一律重新編號成連續的 0..n-1（不是只補 col===undefined 的）。
+  // 舊版只補「從沒設定過」的欄位：只要同一個 day+time 曾經因為任何原因（拖曳、
+  // 複製課表、重複點「+」新增等）疊到超過畫面欄數（西屯2欄/北屯3欄），多出來的
+  // 班次會拿到超出範圍的 col 值，格子上永遠排不進去、也顯示不出來——使用者會覺得
+  // 這個班次「消失了」，其實資料還在，只是變成 UI 找不到的孤兒列。
+  // 這裡改成每次都依現有 col（沒有的視為最後）排序後，整組重新編號，確保 col 永遠
+  // 是連續、不重複、從 0 開始，讓 cmRender() 的動態 SUBCOLS 一定能把每一列都排出來。
   var groups={};
   slots.forEach(function(sl){
     var key=sl.day+'|'+sl.time;
@@ -1921,9 +1933,11 @@ function _ensureSlotCols(slots){
     groups[key].push(sl);
   });
   Object.keys(groups).forEach(function(k){
-    groups[k].forEach(function(sl,i){
-      if(sl.col===undefined) sl.col=i;
+    groups[k].sort(function(a,b){
+      var ca=a.col!==undefined?a.col:999, cb=b.col!==undefined?b.col:999;
+      return ca-cb;
     });
+    groups[k].forEach(function(sl,i){ sl.col=i; });
   });
 }
 
@@ -3179,18 +3193,14 @@ function cmDrop(e, day, time, targetCol){
 
 
 function cmRender(){
-  // Ensure col fields are set on all slots before rendering
-  var slots = (_cmHall==='B') ? SLOTS_B : SLOTS_X;
-  var needsCol = slots.some(function(sl){ return sl.col===undefined; });
-  if(needsCol){
-    _ensureSlotCols(SLOTS_X);
-    _ensureSlotCols(SLOTS_B);
-    // Persist immediately so col survives across drags
-    try{
-      localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
-      localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
-    }catch(e){}
-  }
+  // 每次進來都重新編號 col（不是只在偵測到 undefined 時才做），確保任何卡在
+  // 超出畫面欄數、或編號重複/衝突的孤兒班次都能被修回連續編號，見 _ensureSlotCols 註解。
+  _ensureSlotCols(SLOTS_X);
+  _ensureSlotCols(SLOTS_B);
+  try{
+    localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+  }catch(e){}
   var slots = cmGetSlots();
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var CC = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
@@ -3201,7 +3211,18 @@ function cmRender(){
   if(cnt) cnt.textContent='共 '+slots.length+' 個班次（'+(_cmHall==='X'?'西屯':'北屯')+'館）';
 
   // Build timetable: rows=times, cols=days×SUBCOLS
-  var SUBCOLS = _cmHall==='B' ? 3 : 2;
+  // SUBCOLS 平常是西屯2欄/北屯3欄，但如果某個 day+time 實際堆疊的班次數超過這個
+  // 設計欄數（正常操作不該發生，但既有資料可能已經因為前述孤兒列問題卡住過），
+  // 就動態放寬到能容納下最多班次的那一格，這樣任何班次都一定看得到，不會被吃掉。
+  var baseSubcols = _cmHall==='B' ? 3 : 2;
+  var _dtCount = {};
+  slots.forEach(function(sl){
+    var k=sl.day+'|'+sl.time;
+    _dtCount[k]=(_dtCount[k]||0)+1;
+  });
+  var maxGroupSize = 0;
+  Object.keys(_dtCount).forEach(function(k){ if(_dtCount[k]>maxGroupSize) maxGroupSize=_dtCount[k]; });
+  var SUBCOLS = Math.max(baseSubcols, maxGroupSize);
   var wdDaySet={}, saTimeSet={}, wdTimeSet={};
   slots.forEach(function(sl){
     if(sl.day==='六') saTimeSet[sl.time]=true;
@@ -3346,6 +3367,15 @@ function cmSave(){
       sl.students=sl.students.slice(0,cap);
     }
   } else {
+    // 跟拖曳（cmDrop）用同一套「該時段已達班次上限」規則，避免同一個 day+time
+    // 疊出超過畫面欄數的班次——之前就是這樣悄悄疊出第三筆卻顯示不出來
+    var existingCount = slots.filter(function(s){ return s.day===day && s.time===time; }).length;
+    var capSubcols = _cmHall==='B' ? 3 : 2;
+    if(existingCount >= capSubcols){
+      errEl.textContent = '該時段已達班次上限（'+capSubcols+' 班），請選別的時段，或先刪除/搬移現有班次';
+      errEl.style.display = '';
+      return;
+    }
     var students=[];
     for(var i=1;i<=cap;i++) students.push({order:i,name:'',special:false,upgrade:'',empty:true});
     slots.push({day:day,time:time,cls:cls,teacher:teacher,students:students});
