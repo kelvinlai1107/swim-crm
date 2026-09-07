@@ -2412,6 +2412,18 @@ function cmDrop(e, day, time, targetCol){
 
 
 function cmRender(){
+  // Ensure col fields are set on all slots before rendering
+  var slots = (_cmHall==='B') ? SLOTS_B : SLOTS_X;
+  var needsCol = slots.some(function(sl){ return sl.col===undefined; });
+  if(needsCol){
+    _ensureSlotCols(SLOTS_X);
+    _ensureSlotCols(SLOTS_B);
+    // Persist immediately so col survives across drags
+    try{
+      localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
+      localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+    }catch(e){}
+  }
   var slots = cmGetSlots();
   var DO = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var CC = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
