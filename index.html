@@ -1195,6 +1195,22 @@ var _baseSlotB = null;
 var _baseSeatX = null;
 var _baseSeatB = null;
 
+function _ensureSlotCols(slots){
+  // Assign col index to slots that don't have one
+  // Group by day+time, assign col=0,1,2... in current order
+  var groups={};
+  slots.forEach(function(sl){
+    var key=sl.day+'|'+sl.time;
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(sl);
+  });
+  Object.keys(groups).forEach(function(k){
+    groups[k].forEach(function(sl,i){
+      if(sl.col===undefined) sl.col=i;
+    });
+  });
+}
+
 function seasonInit(){
   // Save original HTML data as S2 base (only once)
   _baseSlotX = JSON.parse(JSON.stringify(SLOTS_X));
@@ -1217,6 +1233,8 @@ function seasonInit(){
   }catch(e){}
   // Load season data
   _loadSeasonData(_curSeason);
+  _ensureSlotCols(SLOTS_X);
+  _ensureSlotCols(SLOTS_B);
   _updateSeasonUI();
 }
 
@@ -2323,6 +2341,30 @@ function cmDragStart(e, hall, idx){
   e.dataTransfer.setData('text/plain', hall+'|'+idx);
 }
 
+function cmDropOnSlot(e, targetIdx){
+  e.preventDefault();
+  e.stopPropagation();
+  if(_cmDragHall===null || _cmDragIdx<0) return;
+  var slots = _cmDragHall==='X' ? SLOTS_X : SLOTS_B;
+  var dragged = slots[_cmDragIdx];
+  var target = slots[targetIdx];
+  if(!dragged || !target) return;
+  if(dragged===target){ _cmDragHall=null; _cmDragIdx=-1; return; }
+
+  if(dragged.day===target.day && dragged.time===target.time){
+    // Same timeslot: swap col values
+    var tmp = dragged.col; dragged.col=target.col; target.col=tmp;
+  } else {
+    // Different timeslot: move dragged to target's day+time, take target's col
+    dragged.day=target.day; dragged.time=target.time; dragged.col=target.col;
+    // Push target's col to make room
+    target.col = (target.col||0)+1;
+  }
+  cmSaveLocal();
+  cmRender();
+  _cmDragHall=null; _cmDragIdx=-1;
+}
+
 function cmDrop(e, day, time){
   e.preventDefault();
   if(_cmDragHall === null || _cmDragIdx < 0) return;
@@ -2343,9 +2385,13 @@ function cmDrop(e, day, time){
     _cmDragHall=null; _cmDragIdx=-1; return;
   }
 
-  // Move: only change day+time, keep cls/teacher/students intact
+  // Move: update day+time, set col to next available in target
   sl.day  = day;
   sl.time = time;
+  // Assign col = highest existing col + 1 in target slot
+  var targetCols = slots.filter(function(s){ return s.day===day&&s.time===time&&s!==sl; })
+    .map(function(s){ return s.col!==undefined?s.col:-1; });
+  sl.col = targetCols.length ? Math.max.apply(null,targetCols)+1 : 0;
   cmSaveLocal();
   cmRender();
   _cmDragHall=null; _cmDragIdx=-1;
@@ -2375,7 +2421,7 @@ function cmRender(){
 
   function getSlots(day,time){
     return slots.filter(function(sl){return sl.day===day&&sl.time===time;})
-      .sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);});
+      .sort(function(a,b){ return (a.col!==undefined?a.col:99)-(b.col!==undefined?b.col:99); });
   }
 
   // slot index finder
@@ -2394,7 +2440,7 @@ function cmRender(){
     var bg=CC[sl.cls]||'#eee', fg=FG[sl.cls]||'#333';
     var filled=sl.students.filter(function(s){return !s.empty;}).length;
     var cap=sl.students.length;
-    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0;cursor:grab" draggable="true" ondragstart="cmDragStart(event,\''+_cmHall+'\','+idx+')" onclick="cmOpenEdit('+idx+')">';
+    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0;cursor:grab" draggable="true" ondragstart="cmDragStart(event,\''+_cmHall+'\','+idx+')" ondragover="event.preventDefault();this.style.outline=\'2px solid #1976D2\'" ondragleave="this.style.outline=\'none\'" ondrop="cmDropOnSlot(event,'+idx+');this.style.outline=\'none\'" onclick="cmOpenEdit('+idx+')">';
     // Simple cell: class badge + teacher only
     h+='<div style="background:'+bg+';padding:6px 4px;display:flex;align-items:center;justify-content:center;gap:4px">';
     h+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+sl.cls+'</span>';
@@ -2635,6 +2681,13 @@ function seatMove(hall, day, time, cls, teacher, order, name){
 var _rvTab = 'upload';
 
 function RVinit(){
+  // Load per-season RV data
+  try{
+    var rvKey='crm_rv_raw_'+_curSeason;
+    var saved=localStorage.getItem(rvKey);
+    if(saved) RV_RAW=JSON.parse(saved);
+    else RV_RAW=[];
+  }catch(e){}
   var btn = document.querySelector('[onclick*="RVtab(\''+_rvTab+'\'"]');
   RVtab(_rvTab, btn);
 }
@@ -2979,7 +3032,7 @@ function RVhandleUpload(e){
       // Replace RV_RAW
       RV_RAW = newRaw;
       // Save to localStorage
-      try{ localStorage.setItem('crm_rv_raw', JSON.stringify(RV_RAW)); }catch(ex){}
+      try{ localStorage.setItem('crm_rv_raw_'+_curSeason, JSON.stringify(RV_RAW)); localStorage.setItem('crm_rv_raw', JSON.stringify(RV_RAW)); }catch(ex){}
 
       if(status) status.innerHTML = "<div class='al al-ok'>✓ 已匯入 "+newRaw.length+" 筆問卷資料</div>";
       // Re-render current tab
