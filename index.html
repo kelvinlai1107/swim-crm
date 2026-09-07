@@ -1235,6 +1235,11 @@ function seasonInit(){
   _loadSeasonData(_curSeason);
   _ensureSlotCols(SLOTS_X);
   _ensureSlotCols(SLOTS_B);
+  // Save immediately so col fields persist before first drag
+  try{
+    localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+  }catch(e){}
   _updateSeasonUI();
 }
 
@@ -2485,7 +2490,13 @@ function cmRender(){
         for(var si=0;si<SUBCOLS;si++){
           // Find slot at this col position
           var slAtCol=null;
-          for(var ci=0;ci<ds.length;ci++){ if((ds[ci].col!==undefined?ds[ci].col:ci)===si){ slAtCol=ds[ci]; break; } }
+          for(var ci=0;ci<ds.length;ci++){ if((ds[ci].col!==undefined?ds[ci].col:999)===si){ slAtCol=ds[ci]; break; } }
+          // Fallback: if no slot has this col, check if any unclaimed slot exists
+          if(!slAtCol){
+            var claimed=[];
+            for(var ci2=0;ci2<ds.length;ci2++) if(ds[ci2].col!==undefined) claimed.push(ds[ci2].col);
+            // Don't auto-assign - leave empty if col doesn't match
+          }
           t+=cellHTML(slAtCol, d, time, si);
         }
       });
