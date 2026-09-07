@@ -3021,11 +3021,21 @@ function cmSetSlots(slots){
   cmSaveLocal();
 }
 function cmSaveLocal(){
+  // 這個函式在檔案裡被重複定義了三次，最後一份（也就是實際生效的這份）
+  // 早期版本沒有寫季別後綴 key（crm_slots_x_<season> 等），只寫了舊版無後綴 key，
+  // 跟 stuDoImport 那次一樣的坑：重新整理後 seasonInit()→_loadSeasonData() 是照
+  // 季別後綴 key 讀資料，讀不到就整個清空——這就是「編輯 26S3 重新整理後不見了」的原因
+  // （26S2 因為有 _baseSlotX/_baseSeatX 當備援，這個問題比較不明顯；其他季別完全沒有備援）
   try{
+    localStorage.setItem('crm_slots_x_'+_curSeason, JSON.stringify(SLOTS_X));
+    localStorage.setItem('crm_slots_b_'+_curSeason, JSON.stringify(SLOTS_B));
+    localStorage.setItem('crm_seat_x_'+_curSeason,  JSON.stringify(SEAT_X));
+    localStorage.setItem('crm_seat_b_'+_curSeason,  JSON.stringify(SEAT_B));
+    // 舊版無後綴 key 仍保留寫入，供尚未更新的其他程式碼路徑相容
     localStorage.setItem('crm_slots_x', JSON.stringify(SLOTS_X));
     localStorage.setItem('crm_slots_b', JSON.stringify(SLOTS_B));
-    localStorage.setItem('crm_seat_x', JSON.stringify(SEAT_X));
-    localStorage.setItem('crm_seat_b', JSON.stringify(SEAT_B));
+    localStorage.setItem('crm_seat_x',  JSON.stringify(SEAT_X));
+    localStorage.setItem('crm_seat_b',  JSON.stringify(SEAT_B));
   }catch(e){}
 }
 function cmInit(){
