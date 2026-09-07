@@ -3787,6 +3787,11 @@ function RVtrialRender(){
     return;
   }
 
+  // 跟班級管理的 cmRender 用同一套欄位邏輯：先確保 col 沒有孤兒/衝突，
+  // 排版時照 col 對應到左右欄，這樣班級管理裡調整過的左右欄位置，
+  // 劃位試排這邊才會顯示成同一個樣子，不會自己重新按班別/老師代號排序
+  if(typeof _ensureSlotCols==='function') _ensureSlotCols(slots);
+
   var BG  = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
   var FG  = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
   var TBG = '#EEF2FF', TW=52, CW=80, HH=24, SH=20;
@@ -3802,11 +3807,18 @@ function RVtrialRender(){
   var hasSat=slots.some(function(sl){return sl.day==='六';});
   var wdTimes=Object.keys(wdTimeSet).sort();
   var saTimes=Object.keys(saTimeSet).sort();
-  var SUBCOLS=hall==='B'?3:2;
+  // 跟 cmRender 一樣：基本欄數是西屯2欄/北屯3欄，但若某個 day+time 實際堆疊
+  // 的班次數超過這個欄數（既有資料可能還沒被 _ensureSlotCols 修過），就動態放寬
+  var baseSubcols = hall==='B' ? 3 : 2;
+  var _dtCount={};
+  slots.forEach(function(sl){ var k=sl.day+'|'+sl.time; _dtCount[k]=(_dtCount[k]||0)+1; });
+  var maxGroupSize=0;
+  Object.keys(_dtCount).forEach(function(k){ if(_dtCount[k]>maxGroupSize) maxGroupSize=_dtCount[k]; });
+  var SUBCOLS=Math.max(baseSubcols, maxGroupSize);
 
   function getSlots(day,time){
     return slots.filter(function(sl){return sl.day===day&&sl.time===time;})
-      .sort(function(a,b){return (a.cls+a.teacher).localeCompare(b.cls+b.teacher);});
+      .sort(function(a,b){ return (a.col!==undefined?a.col:99)-(b.col!==undefined?b.col:99); });
   }
   function slotIdx(sl){ return slots.indexOf(sl); }
 
@@ -3860,7 +3872,18 @@ function RVtrialRender(){
       t+='<tr><td style="'+ts+'">'+time+'</td>';
       days.forEach(function(d){
         var ds=getSlots(d,time);
-        for(var si=0;si<SUBCOLS;si++) t+=slotCell(ds[si]||null);
+        for(var si=0;si<SUBCOLS;si++){
+          // 跟 cmRender 的 cellHTML 同一套邏輯：col 有效就照 col 對到左右欄，
+          // 沒有 col 時（理論上不會發生，因為上面已經跑過 _ensureSlotCols）才退回陣列順序
+          var slAtCol=null, anyHasCol=false;
+          for(var ci=0;ci<ds.length;ci++){ if(ds[ci].col!==undefined){ anyHasCol=true; break; } }
+          if(anyHasCol){
+            for(var ci=0;ci<ds.length;ci++){ if(ds[ci].col===si){ slAtCol=ds[ci]; break; } }
+          } else {
+            slAtCol = ds[si] || null;
+          }
+          t+=slotCell(slAtCol);
+        }
       });
       t+='</tr>';
     });
