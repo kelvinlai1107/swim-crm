@@ -2190,7 +2190,7 @@ function G(p){
   document.querySelectorAll(".ni").forEach(function(n){n.classList.remove("active");});
   var ni=document.getElementById("ni-"+p);
   if(ni) ni.classList.add("active");
-  if(p==="ncc") RN();
+  if(p==="ncc" && typeof RN==="function") RN();
   if(p==="renewal") RVinit();
   if(p==="formal")  formalInit();
   if(p==="classmgmt") cmInit();
@@ -2339,7 +2339,12 @@ function stuDoImport(){
       +STU.filter(function(s){return s.hall==='西屯';}).length+" / 北屯 "
       +STU.filter(function(s){return s.hall==='北屯';}).length+"）</div>";
     btn.disabled = false;
-    RS(); RN(); // Re-render student list
+    // Refresh whichever views are currently mounted (正式生 list/grid/vacancy + legacy 所有學員/NCC if present)
+    if(typeof formalRender==="function")       formalRender();
+    if(typeof formalGridRender==="function")   formalGridRender();
+    if(typeof formalVacancyRender==="function")formalVacancyRender();
+    if(typeof RS==="function") RS();
+    if(typeof RN==="function") RN();
     setTimeout(function(){ document.getElementById('stu-import-ov').classList.remove('open'); }, 1500);
   }).catch(function(err){
     status.innerHTML = "<div class='al al-rd'>❌ 解析失敗："+err+"</div>";
