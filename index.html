@@ -2348,54 +2348,64 @@ function cmDropOnSlot(e, targetIdx){
   var slots = _cmDragHall==='X' ? SLOTS_X : SLOTS_B;
   var dragged = slots[_cmDragIdx];
   var target = slots[targetIdx];
-  if(!dragged || !target) return;
-  if(dragged===target){ _cmDragHall=null; _cmDragIdx=-1; return; }
+  if(!dragged || !target || dragged===target){ _cmDragHall=null; _cmDragIdx=-1; return; }
 
   if(dragged.day===target.day && dragged.time===target.time){
     // Same timeslot: swap col values
-    var tmp = dragged.col; dragged.col=target.col; target.col=tmp;
+    var tmp = dragged.col!==undefined?dragged.col:0;
+    dragged.col = target.col!==undefined?target.col:1;
+    target.col = tmp;
   } else {
-    // Different timeslot: move dragged to target's day+time, take target's col
-    dragged.day=target.day; dragged.time=target.time; dragged.col=target.col;
-    // Push target's col to make room
-    target.col = (target.col||0)+1;
+    // Different timeslot: move dragged into target's slot position
+    // Check capacity
+    var SUBCOLS = _cmDragHall==='B' ? 3 : 2;
+    var existing = slots.filter(function(s){ return s.day===target.day&&s.time===target.time&&s!==dragged; });
+    if(existing.length >= SUBCOLS){ alert('目標時段已滿'); _cmDragHall=null; _cmDragIdx=-1; return; }
+    // Target takes dragged's old col (stay in place), dragged moves to fill gap
+    var newCol = existing.map(function(s){return s.col!==undefined?s.col:-1;});
+    var targetCol = 0;
+    while(newCol.indexOf(targetCol)>=0) targetCol++;
+    dragged.day=target.day; dragged.time=target.time; dragged.col=targetCol;
   }
   cmSaveLocal();
   cmRender();
   _cmDragHall=null; _cmDragIdx=-1;
 }
 
-function cmDrop(e, day, time){
+
+function cmDrop(e, day, time, targetCol){
   e.preventDefault();
   if(_cmDragHall === null || _cmDragIdx < 0) return;
   var slots = _cmDragHall==='X' ? SLOTS_X : SLOTS_B;
   var sl = slots[_cmDragIdx];
   if(!sl){ _cmDragHall=null; _cmDragIdx=-1; return; }
 
-  // Reject if dropping onto same day+time (would disrupt fixed position order)
-  if(sl.day===day && sl.time===time){
-    _cmDragHall=null; _cmDragIdx=-1; return;
+  // Check if target col is already occupied
+  var SUBCOLS = _cmDragHall==='B' ? 3 : 2;
+  var occupied = slots.filter(function(s){
+    return s.day===day && s.time===time && s!==sl &&
+           (s.col!==undefined ? s.col : 99) === (targetCol!==undefined ? targetCol : 99);
+  });
+  if(occupied.length > 0){
+    alert('該位置已有班次，請拖到空格'); _cmDragHall=null; _cmDragIdx=-1; return;
   }
 
-  // Check capacity: target time slot must have room
-  var SUBCOLS = _cmDragHall==='B' ? 3 : 2;
-  var existing = slots.filter(function(s){ return s.day===day && s.time===time; });
+  // Check total capacity
+  var existing = slots.filter(function(s){ return s.day===day && s.time===time && s!==sl; });
   if(existing.length >= SUBCOLS){
     alert('該時段已達班次上限（'+SUBCOLS+'班），無法移入');
     _cmDragHall=null; _cmDragIdx=-1; return;
   }
 
-  // Move: update day+time, set col to next available in target
+  // Move: set new day, time, and col
   sl.day  = day;
   sl.time = time;
-  // Assign col = highest existing col + 1 in target slot
-  var targetCols = slots.filter(function(s){ return s.day===day&&s.time===time&&s!==sl; })
-    .map(function(s){ return s.col!==undefined?s.col:-1; });
-  sl.col = targetCols.length ? Math.max.apply(null,targetCols)+1 : 0;
+  sl.col  = targetCol !== undefined ? targetCol : (existing.length ? Math.max.apply(null, existing.map(function(s){ return s.col!==undefined?s.col:0; }))+1 : 0);
   cmSaveLocal();
   cmRender();
   _cmDragHall=null; _cmDragIdx=-1;
 }
+
 
 function cmRender(){
   var slots = cmGetSlots();
@@ -2427,12 +2437,12 @@ function cmRender(){
   // slot index finder
   function findIdx(sl){ return slots.indexOf(sl); }
 
-  function cellHTML(sl, day, time){
+  function cellHTML(sl, day, time, colIdx){
     if(!sl){
       return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e8e8e8;background:#f9f9f9;cursor:pointer;vertical-align:middle;text-align:center" '+
         'ondragover="event.preventDefault();this.style.background=\'#E3F2FD\';" '+
         'ondragleave="this.style.background=\'#f9f9f9\'" '+
-        'ondrop="cmDrop(event,\''+day+'\',\''+time+'\');this.style.background=\'#f9f9f9\'" '+
+        'ondrop="cmDrop(event,\''+day+'\',\''+time+'\','+colIdx+');this.style.background=\'#f9f9f9\'" '+
         'onclick="cmOpenAddAt(\''+day+'\',\''+time+'\')">'+
         '<span style="color:#ccc;font-size:18px;line-height:1">＋</span></td>';
     }
@@ -2472,7 +2482,12 @@ function cmRender(){
       t+='<tr><td style="position:sticky;left:0;z-index:5;width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';text-align:center;font-weight:700;font-size:11px;color:#333;vertical-align:middle;padding:0 2px">'+time+'</td>';
       days.forEach(function(d){
         var ds=getSlots(d,time);
-        for(var si=0;si<SUBCOLS;si++) t+=cellHTML(ds[si]||null, d, time);
+        for(var si=0;si<SUBCOLS;si++){
+          // Find slot at this col position
+          var slAtCol=null;
+          for(var ci=0;ci<ds.length;ci++){ if((ds[ci].col!==undefined?ds[ci].col:ci)===si){ slAtCol=ds[ci]; break; } }
+          t+=cellHTML(slAtCol, d, time, si);
+        }
       });
       t+='</tr>';
     });
