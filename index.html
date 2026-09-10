@@ -4723,11 +4723,21 @@ function RVgrid(){
     }catch(e){ return null; }
   }
 
-  function _spGetToken(){
+  // interactive=false（自動觸發，例如每次編輯後的自動同步、登入後的自動拉取）
+  // 只嘗試「靜默」取得授權，絕對不彈出跳出視窗 —— 瀏覽器會擋掉非使用者直接
+  // 點擊觸發的彈出視窗，若硬是嘗試彈窗，同步會卡住或失敗，卻查不出原因。
+  // interactive=true（使用者實際點擊「☁ 同步設定」測試/儲存，或點擊同步
+  // 狀態小標籤重試）才允許彈出 Microsoft 登入視窗要求授權。
+  function _spGetToken(interactive){
     var account = _spGetAccount();
     if(!account) return Promise.reject(new Error('尚未登入'));
     return _msalApp.acquireTokenSilent({ scopes: SP_SCOPES, account: account })
-      .catch(function(){
+      .catch(function(silentErr){
+        if(!interactive){
+          var err = new Error('需要授權才能連線 SharePoint');
+          err.needsConsent = true;
+          throw err;
+        }
         return _msalApp.acquireTokenPopup({ scopes: SP_SCOPES, account: account });
       })
       .then(function(res){ return res.accessToken; });
@@ -4812,13 +4822,13 @@ function RVgrid(){
     }
   }
 
-  function _spPush(){
-    if(!_spGetAccount()) return; // 尚未登入，不動作也不顯示錯誤
-    if(_spPushInFlight){ _spPushQueued = true; return; }
+  function _spPush(interactive){
+    if(!_spGetAccount()) return Promise.resolve(); // 尚未登入，不動作也不顯示錯誤
+    if(_spPushInFlight){ _spPushQueued = true; return Promise.resolve(); }
     _spPushInFlight = true;
     _spSetStatus('☁ 同步中…', 'syncing');
     var cfg = _spGetConfig();
-    _spGetToken()
+    return _spGetToken(interactive)
       .then(function(token){ return _spResolveDrive(token, cfg).then(function(){ return token; }); })
       .then(function(token){
         var payload = {
@@ -4838,7 +4848,11 @@ function RVgrid(){
       })
       .catch(function(err){
         console.error('SharePoint 同步失敗:', err);
-        _spSetStatus('☁ 同步失敗（點擊重試）', 'err', String((err && err.message) || err));
+        if(err && err.needsConsent){
+          _spSetStatus('☁ 需要授權，點我連接 SharePoint', 'err', '第一次在這台裝置使用，點一下這個標籤，跳出視窗時按同意即可，之後就會自動同步');
+        } else {
+          _spSetStatus('☁ 同步失敗（點擊重試）', 'err', String((err && err.message) || err));
+        }
       })
       .then(function(){
         _spPushInFlight = false;
@@ -4849,7 +4863,7 @@ function RVgrid(){
   function _spSchedulePush(delay){
     if(!_spGetAccount()) return;
     if(_spPushTimer) clearTimeout(_spPushTimer);
-    _spPushTimer = setTimeout(_spPush, delay == null ? SP_PUSH_DEBOUNCE_MS : delay);
+    _spPushTimer = setTimeout(function(){ _spPush(false); }, delay == null ? SP_PUSH_DEBOUNCE_MS : delay);
   }
 
   // 監聽所有 crm_ 開頭的 localStorage 寫入（涵蓋這個檔案裡所有重複定義過的
@@ -4862,10 +4876,10 @@ function RVgrid(){
     }
   };
 
-  function _spPull(){
+  function _spPull(interactive){
     _spSetStatus('☁ 讀取雲端資料中…', 'syncing');
     var cfg = _spGetConfig();
-    return _spGetToken()
+    return _spGetToken(interactive)
       .then(function(token){ return _spResolveDrive(token, cfg).then(function(){ return token; }); })
       .then(function(token){
         return _spGraphFetch(_spItemUrl(cfg), { method: 'GET' }, token)
@@ -4885,7 +4899,11 @@ function RVgrid(){
       })
       .catch(function(err){
         console.error('SharePoint 讀取失敗:', err);
-        _spSetStatus('☁ 無法連線雲端（使用本機資料）', 'err', String((err && err.message) || err));
+        if(err && err.needsConsent){
+          _spSetStatus('☁ 需要授權，點我連接 SharePoint', 'err', '第一次在這台裝置使用，點一下這個標籤，跳出視窗時按同意即可，之後就會自動同步');
+        } else {
+          _spSetStatus('☁ 無法連線雲端（使用本機資料，點擊重試）', 'err', String((err && err.message) || err));
+        }
       });
   }
 
@@ -4901,7 +4919,7 @@ function RVgrid(){
         settled = true;
         _spOrigSeasonInit.apply(self, args);
       }, SP_PULL_TIMEOUT_MS);
-      _spPull().then(function(){
+      _spPull(false).then(function(){
         if(settled) return;
         settled = true;
         clearTimeout(to);
@@ -4915,9 +4933,18 @@ function RVgrid(){
     };
   }
 
+  // 點擊同步狀態小標籤：這是一個真正的使用者點擊動作，瀏覽器才不會擋掉跳出
+  // 視窗，所以這裡才允許互動式授權（第一次在這台裝置/瀏覽器使用時會跳出
+  // Microsoft 登入視窗要求同意權限；同意過一次之後，之後的自動同步就不會
+  // 再跳窗了）。先推送本機資料（確保這台裝置的最新編輯不會被覆蓋掉），
+  // 成功後再拉一次，順便同步其他裝置可能更新的資料。
+  function _spAuthorizeAndSync(){
+    _spPush(true).then(function(){ return _spPull(true); });
+  }
+
   var _statusClickEl = _spStatusEl();
   if(_statusClickEl){
-    _statusClickEl.addEventListener('click', function(){ _spPush(); });
+    _statusClickEl.addEventListener('click', _spAuthorizeAndSync);
   }
 
   // ── 同步設定面板（管理員可見，見畫面右上角「☁ 同步設定」按鈕）──────────
@@ -4951,7 +4978,7 @@ function RVgrid(){
     res.textContent = '測試中…';
     var savedDriveId = _spDriveId; // 暫存，測試不覆蓋現有已生效設定的快取
     _spDriveId = null;
-    _spGetToken()
+    _spGetToken(true)
       .then(function(token){ return _spResolveDrive(token, cfg); })
       .then(function(){
         res.style.background = 'var(--tl-bg)';
@@ -4981,7 +5008,7 @@ function RVgrid(){
     _spSetConfig(cfg);
     document.getElementById('sp-cfg-modal').classList.remove('open');
     _spSetStatus('☁ 設定已更新，同步中…', 'syncing');
-    _spPush();
+    _spPush(true);
   };
 
   // 除錯用：在瀏覽器主控台可呼叫 _spDebug() 查看目前解析到的網站/文件庫資訊，
@@ -4990,8 +5017,8 @@ function RVgrid(){
     var cfg = _spGetConfig();
     return { config: cfg, resolved: _spResolvedInfo, driveId: _spDriveId };
   };
-  window._spForceSync = _spPush;
-  window._spForcePull = _spPull;
+  window._spForceSync = function(){ return _spPush(true); };
+  window._spForcePull = function(){ return _spPull(true); };
   window._spGetConfig = _spGetConfig;
 })();
 
