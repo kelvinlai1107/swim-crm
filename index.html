@@ -4876,7 +4876,14 @@ function RVgrid(){
     }
   };
 
-  function _spPull(interactive){
+  // forceRefreshUI：拉回資料並套用到 localStorage 之後，畫面上目前顯示的
+  // 班表/劃位是「頁面載入當下」就畫好的，之後 localStorage 內容再怎麼變，
+  // 畫面不會自動重畫。第一次登入時的自動拉取，因為是在畫面第一次繪製「之
+  // 前」執行，天生就沒有這個問題；但之後任何時候（例如點同步狀態小標籤）
+  // 主動拉回較新的資料時，若不強制重新整理，使用者會看到「已同步／已從
+  // 雲端載入」卻還是舊畫面 —— 這裡加上這個參數，套用到真的有變動的資料時
+  // 自動重新整理頁面，確保畫面跟資料一致。
+  function _spPull(interactive, forceRefreshUI){
     _spSetStatus('☁ 讀取雲端資料中…', 'syncing');
     var cfg = _spGetConfig();
     return _spGetToken(interactive)
@@ -4893,6 +4900,9 @@ function RVgrid(){
         if(remote && remote.data){
           _spApplyRemoteData(remote.data);
           _spSetStatus('☁ 已從雲端載入（' + (remote.savedAt ? new Date(remote.savedAt).toLocaleString('zh-TW') : '') + '）', 'ok');
+          if(forceRefreshUI){
+            setTimeout(function(){ window.location.reload(); }, 500);
+          }
         } else {
           _spSetStatus('☁ 尚無雲端資料，將以本機資料建立', 'ok');
         }
@@ -4939,7 +4949,7 @@ function RVgrid(){
   // 再跳窗了）。先推送本機資料（確保這台裝置的最新編輯不會被覆蓋掉），
   // 成功後再拉一次，順便同步其他裝置可能更新的資料。
   function _spAuthorizeAndSync(){
-    _spPush(true).then(function(){ return _spPull(true); });
+    _spPush(true).then(function(){ return _spPull(true, true); });
   }
 
   var _statusClickEl = _spStatusEl();
@@ -5018,7 +5028,7 @@ function RVgrid(){
     return { config: cfg, resolved: _spResolvedInfo, driveId: _spDriveId };
   };
   window._spForceSync = function(){ return _spPush(true); };
-  window._spForcePull = function(){ return _spPull(true); };
+  window._spForcePull = function(){ return _spPull(true, true); };
   window._spGetConfig = _spGetConfig;
 })();
 
