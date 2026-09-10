@@ -14,7 +14,7 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--tx);
 .logo{font-size:15px;font-weight:700;color:var(--bl)}.logo span{color:var(--tx3);font-weight:300}
 .s-pill{font-size:12px;background:var(--bl-bg);color:var(--bl);padding:3px 10px;border-radius:20px;font-weight:500}
 .u-area{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx2)}
-.sp-sync-status{font-size:11px;color:var(--tx3);cursor:default;white-space:nowrap;user-select:none;padding:2px 8px;border-radius:20px}
+.sp-sync-status{font-size:11px;color:var(--tx3);cursor:pointer;white-space:nowrap;user-select:none;padding:2px 8px;border-radius:20px;background:var(--gy);border:1px solid var(--bd2)}
 .sp-sync-status.syncing{color:var(--bl);background:var(--bl-bg)}
 .sp-sync-status.ok{color:var(--tl);background:var(--tl-bg)}
 .sp-sync-status.err{color:var(--rd);background:var(--rd-bg);cursor:pointer}
@@ -397,7 +397,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     <span class="tag t-bl" style="cursor:pointer">西屯館</span>
     <span class="tag t-gy" style="cursor:pointer">北屯館</span>
   </div>
-  <span id="sp-sync-status" class="sp-sync-status" title="SharePoint 同步狀態"></span>
+  <span id="sp-sync-status" class="sp-sync-status" title="SharePoint 同步狀態，點擊可手動同步">☁ 同步狀態</span>
   <div class="u-area"><div class="av">李M</div><span>李門市</span><span style="color:var(--tx3);font-size:11px">門市老師</span></div>
 </div>
 <div class="sidebar">
