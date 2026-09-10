@@ -14,6 +14,10 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--tx);
 .logo{font-size:15px;font-weight:700;color:var(--bl)}.logo span{color:var(--tx3);font-weight:300}
 .s-pill{font-size:12px;background:var(--bl-bg);color:var(--bl);padding:3px 10px;border-radius:20px;font-weight:500}
 .u-area{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx2)}
+.sp-sync-status{font-size:11px;color:var(--tx3);cursor:default;white-space:nowrap;user-select:none;padding:2px 8px;border-radius:20px}
+.sp-sync-status.syncing{color:var(--bl);background:var(--bl-bg)}
+.sp-sync-status.ok{color:var(--tl);background:var(--tl-bg)}
+.sp-sync-status.err{color:var(--rd);background:var(--rd-bg);cursor:pointer}
 .av{width:28px;height:28px;border-radius:50%;background:var(--bl);color:#fff;font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center}
 .sidebar{background:var(--sf);border-right:1px solid var(--bd);padding:12px 0;overflow-y:auto;transition:width .2s;width:220px;position:relative}
 .sidebar.collapsed{width:52px;overflow:hidden}
@@ -359,6 +363,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     <span class="tag t-bl" style="cursor:pointer">西屯館</span>
     <span class="tag t-gy" style="cursor:pointer">北屯館</span>
   </div>
+  <span id="sp-sync-status" class="sp-sync-status" title="SharePoint 同步狀態"></span>
   <div class="u-area"><div class="av">李M</div><span>李門市</span><span style="color:var(--tx3);font-size:11px">門市老師</span></div>
 </div>
 <div class="sidebar">
@@ -4591,6 +4596,251 @@ function RVgrid(){
   document.getElementById("rv-grid-body").innerHTML = h;
   attachGridTooltips();
 }
+
+
+// ── SharePoint 自動同步（跨裝置資料同步）───────────────────────────────
+// 目的：每次寫入 localStorage 的 crm_ 開頭資料時，自動同步一份到 SharePoint
+// 上的 JSON 檔；登入後、第一次載入資料前，先從 SharePoint 拉回最新版本，
+// 讓不同電腦開啟這個工具時能看到同一份資料。
+//
+// 若之後要調整同步位置，只要改下面 SP_SITE_HOST / SP_SITE_PATH /
+// SP_LIBRARY_NAME / SP_FOLDER_SEGMENTS 這幾個設定值即可。
+(function(){
+  var SP_SITE_HOST = "lalaso.sharepoint.com";
+  var SP_SITE_PATH = "/sites/c-level2";
+  // 文件庫的「內部名稱」（網址中顯示的是這個，左側導覽顯示的中文名稱是「營運管理」）
+  var SP_LIBRARY_NAME = "DocLib";
+  // 資料夾路徑（對應畫面上的 營運管理 > Claude > LALASO CRM > JSON）
+  var SP_FOLDER_SEGMENTS = ["Claude", "LALASO CRM", "JSON"];
+  var SP_FILE_NAME = "swim-crm-data.json";
+  var SP_SCOPES = ["Sites.ReadWrite.All"];
+  var SP_PUSH_DEBOUNCE_MS = 2500;
+  var SP_PULL_TIMEOUT_MS = 8000;
+
+  var _spDriveId = null;
+  var _spResolvedInfo = null;
+  var _spPushTimer = null;
+  var _spPushInFlight = false;
+  var _spPushQueued = false;
+  var _spPulledOnce = false;
+  var _spApplyingRemote = false;
+
+  function _spStatusEl(){ return document.getElementById('sp-sync-status'); }
+
+  function _spSetStatus(text, cls, title){
+    var el = _spStatusEl();
+    if(!el) return;
+    el.textContent = text;
+    el.className = 'sp-sync-status' + (cls ? (' ' + cls) : '');
+    if(title) el.title = title; else el.title = 'SharePoint 同步狀態';
+  }
+
+  function _spEncodePath(segments){
+    return segments.map(function(s){ return encodeURIComponent(s); }).join('/');
+  }
+
+  function _spGetAccount(){
+    if(typeof _msalApp === 'undefined' || !_msalApp) return null;
+    try{
+      var accs = _msalApp.getAllAccounts();
+      return (accs && accs.length) ? accs[0] : null;
+    }catch(e){ return null; }
+  }
+
+  function _spGetToken(){
+    var account = _spGetAccount();
+    if(!account) return Promise.reject(new Error('尚未登入'));
+    return _msalApp.acquireTokenSilent({ scopes: SP_SCOPES, account: account })
+      .catch(function(){
+        return _msalApp.acquireTokenPopup({ scopes: SP_SCOPES, account: account });
+      })
+      .then(function(res){ return res.accessToken; });
+  }
+
+  function _spGraphFetch(url, opts, token){
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    opts.headers['Authorization'] = 'Bearer ' + token;
+    return fetch(url, opts).then(function(resp){
+      if(!resp.ok){
+        return resp.text().then(function(t){
+          var err = new Error('Graph API 錯誤 ' + resp.status + ': ' + (t || '').slice(0, 300));
+          err.status = resp.status;
+          throw err;
+        });
+      }
+      return resp;
+    });
+  }
+
+  function _spResolveDrive(token){
+    if(_spDriveId) return Promise.resolve(_spDriveId);
+    var siteUrl = 'https://graph.microsoft.com/v1.0/sites/' + SP_SITE_HOST + ':' + SP_SITE_PATH;
+    return _spGraphFetch(siteUrl, {}, token)
+      .then(function(r){ return r.json(); })
+      .then(function(site){
+        var siteId = site.id;
+        var drivesUrl = 'https://graph.microsoft.com/v1.0/sites/' + siteId + '/drives';
+        return _spGraphFetch(drivesUrl, {}, token).then(function(r){ return r.json(); }).then(function(dl){
+          var drives = dl.value || [];
+          var match = drives.filter(function(d){ return (d.name || '').toLowerCase() === SP_LIBRARY_NAME.toLowerCase(); })[0];
+          if(!match){
+            match = drives.filter(function(d){ return (d.webUrl || '').toLowerCase().indexOf('/' + SP_LIBRARY_NAME.toLowerCase()) >= 0; })[0];
+          }
+          if(!match){
+            throw new Error('在網站中找不到名為「' + SP_LIBRARY_NAME + '」的文件庫（現有文件庫：' + drives.map(function(d){ return d.name; }).join('、') + '）');
+          }
+          _spDriveId = match.id;
+          _spResolvedInfo = { siteId: siteId, driveId: match.id, driveName: match.name, driveWebUrl: match.webUrl };
+          return _spDriveId;
+        });
+      });
+  }
+
+  function _spItemUrl(){
+    return 'https://graph.microsoft.com/v1.0/drives/' + _spDriveId + '/root:/' +
+      _spEncodePath(SP_FOLDER_SEGMENTS.concat([SP_FILE_NAME])) + ':/content';
+  }
+
+  function _spCollectLocalData(){
+    var out = {};
+    for(var i = 0; i < localStorage.length; i++){
+      var k = localStorage.key(i);
+      if(k && k.indexOf('crm_') === 0){
+        out[k] = localStorage.getItem(k);
+      }
+    }
+    return out;
+  }
+
+  function _spApplyRemoteData(data){
+    if(!data || typeof data !== 'object') return;
+    _spApplyingRemote = true;
+    try{
+      Object.keys(data).forEach(function(k){
+        if(k.indexOf('crm_') === 0){
+          _spOrigSetItem.call(localStorage, k, data[k]);
+        }
+      });
+    } finally {
+      _spApplyingRemote = false;
+    }
+  }
+
+  function _spPush(){
+    if(!_spGetAccount()) return; // 尚未登入，不動作也不顯示錯誤
+    if(_spPushInFlight){ _spPushQueued = true; return; }
+    _spPushInFlight = true;
+    _spSetStatus('☁ 同步中…', 'syncing');
+    _spGetToken()
+      .then(function(token){ return _spResolveDrive(token).then(function(){ return token; }); })
+      .then(function(token){
+        var payload = {
+          savedAt: new Date().toISOString(),
+          by: (typeof _msalEmail !== 'undefined' ? _msalEmail : ''),
+          data: _spCollectLocalData()
+        };
+        return _spGraphFetch(_spItemUrl(), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }, token);
+      })
+      .then(function(){
+        var now = new Date();
+        _spSetStatus('☁ 已同步 ' + now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }), 'ok');
+      })
+      .catch(function(err){
+        console.error('SharePoint 同步失敗:', err);
+        _spSetStatus('☁ 同步失敗（點擊重試）', 'err', String((err && err.message) || err));
+      })
+      .then(function(){
+        _spPushInFlight = false;
+        if(_spPushQueued){ _spPushQueued = false; _spSchedulePush(0); }
+      });
+  }
+
+  function _spSchedulePush(delay){
+    if(!_spGetAccount()) return;
+    if(_spPushTimer) clearTimeout(_spPushTimer);
+    _spPushTimer = setTimeout(_spPush, delay == null ? SP_PUSH_DEBOUNCE_MS : delay);
+  }
+
+  // 監聽所有 crm_ 開頭的 localStorage 寫入（涵蓋這個檔案裡所有重複定義過的
+  // cmSaveLocal / _saveCurrentSeason 等存檔函式，不必逐一修改每個存檔路徑）
+  var _spOrigSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function(key, value){
+    _spOrigSetItem.call(this, key, value);
+    if(this === localStorage && key && key.indexOf('crm_') === 0 && !_spApplyingRemote){
+      _spSchedulePush();
+    }
+  };
+
+  function _spPull(){
+    _spSetStatus('☁ 讀取雲端資料中…', 'syncing');
+    return _spGetToken()
+      .then(function(token){ return _spResolveDrive(token).then(function(){ return token; }); })
+      .then(function(token){
+        return _spGraphFetch(_spItemUrl(), { method: 'GET' }, token)
+          .then(function(r){ return r.json(); })
+          .catch(function(err){
+            if(err && err.status === 404) return null; // 第一次同步，雲端還沒有檔案
+            throw err;
+          });
+      })
+      .then(function(remote){
+        if(remote && remote.data){
+          _spApplyRemoteData(remote.data);
+          _spSetStatus('☁ 已從雲端載入（' + (remote.savedAt ? new Date(remote.savedAt).toLocaleString('zh-TW') : '') + '）', 'ok');
+        } else {
+          _spSetStatus('☁ 尚無雲端資料，將以本機資料建立', 'ok');
+        }
+      })
+      .catch(function(err){
+        console.error('SharePoint 讀取失敗:', err);
+        _spSetStatus('☁ 無法連線雲端（使用本機資料）', 'err', String((err && err.message) || err));
+      });
+  }
+
+  // 登入後、第一次 seasonInit()（載入並繪製資料）之前，先從 SharePoint 拉一次
+  if(typeof seasonInit === 'function'){
+    var _spOrigSeasonInit = seasonInit;
+    seasonInit = function(){
+      if(_spPulledOnce){ return _spOrigSeasonInit.apply(this, arguments); }
+      _spPulledOnce = true;
+      var args = arguments, self = this, settled = false;
+      var to = setTimeout(function(){
+        if(settled) return;
+        settled = true;
+        _spOrigSeasonInit.apply(self, args);
+      }, SP_PULL_TIMEOUT_MS);
+      _spPull().then(function(){
+        if(settled) return;
+        settled = true;
+        clearTimeout(to);
+        _spOrigSeasonInit.apply(self, args);
+      }).catch(function(){
+        if(settled) return;
+        settled = true;
+        clearTimeout(to);
+        _spOrigSeasonInit.apply(self, args);
+      });
+    };
+  }
+
+  var _statusClickEl = _spStatusEl();
+  if(_statusClickEl){
+    _statusClickEl.addEventListener('click', function(){ _spPush(); });
+  }
+
+  // 除錯用：在瀏覽器主控台可呼叫 _spDebug() 查看目前解析到的網站/文件庫資訊，
+  // 或呼叫 _spForceSync() / _spForcePull() 手動觸發同步。
+  window._spDebug = function(){
+    return { resolved: _spResolvedInfo, driveId: _spDriveId, folder: SP_FOLDER_SEGMENTS.join('/'), file: SP_FILE_NAME };
+  };
+  window._spForceSync = _spPush;
+  window._spForcePull = _spPull;
+})();
 
 </script>
 </body>
