@@ -4690,6 +4690,18 @@ function RVgrid(){
     _spResolvedInfo = null;
   }
 
+  // 記錄這台裝置「上次確定跟雲端一致」的版本時間（存 SharePoint 檔案裡的
+  // savedAt），推送前用來判斷雲端是不是已經被別的裝置更新過 —— 避免這台
+  // 裝置手上比較舊/比較少的本機資料，把雲端剛存好的新資料蓋掉。
+  var SP_LAST_SYNC_KEY = "sp_last_sync_ts";
+  function _spGetLastSyncTs(){
+    try{ return localStorage.getItem(SP_LAST_SYNC_KEY) || null; }catch(e){ return null; }
+  }
+  function _spSetLastSyncTs(ts){
+    if(!ts) return;
+    try{ _spOrigSetItem.call(localStorage, SP_LAST_SYNC_KEY, ts); }catch(e){}
+  }
+
   function _spParseSite(siteUrl){
     // 接受 https://xxx.sharepoint.com/sites/yyy 或含尾端斜線／多餘路徑
     var m = String(siteUrl || '').match(/^https?:\/\/([^\/]+)(\/sites\/[^\/]+)/i);
@@ -4822,6 +4834,11 @@ function RVgrid(){
     }
   }
 
+  // 推送前先檢查雲端目前的版本：如果雲端的 savedAt 比這台裝置上次確定同步
+  // 過的版本還新（或這台裝置根本還沒有基準版本），代表雲端已經有別的裝置
+  // 存過這台裝置還不知道的新資料 —— 這種情況絕對不能就這樣把本機資料蓋
+  // 上去（本機資料可能反而是比較舊/比較少的），改成把雲端這份新資料拉回來
+  // 套用，這次先不推送，避免資料被蓋掉。
   function _spPush(interactive){
     if(!_spGetAccount()) return Promise.resolve(); // 尚未登入，不動作也不顯示錯誤
     if(_spPushInFlight){ _spPushQueued = true; return Promise.resolve(); }
@@ -4831,6 +4848,23 @@ function RVgrid(){
     return _spGetToken(interactive)
       .then(function(token){ return _spResolveDrive(token, cfg).then(function(){ return token; }); })
       .then(function(token){
+        return _spGraphFetch(_spItemUrl(cfg), { method: 'GET' }, token)
+          .then(function(r){ return r.json(); })
+          .catch(function(err){
+            if(err && err.status === 404) return null; // 雲端還沒有檔案，第一次建立
+            throw err;
+          })
+          .then(function(remote){ return { token: token, remote: remote }; });
+      })
+      .then(function(ctx){
+        var lastSeen = _spGetLastSyncTs();
+        var remoteLooksNewer = ctx.remote && ctx.remote.savedAt && (!lastSeen || ctx.remote.savedAt > lastSeen);
+        if(remoteLooksNewer){
+          var conflictErr = new Error('雲端已有這台裝置還不知道的更新版本');
+          conflictErr.remoteNewer = true;
+          conflictErr.remote = ctx.remote;
+          throw conflictErr;
+        }
         var payload = {
           savedAt: new Date().toISOString(),
           by: (typeof _msalEmail !== 'undefined' ? _msalEmail : ''),
@@ -4840,13 +4874,22 @@ function RVgrid(){
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        }, token);
+        }, ctx.token).then(function(){ return payload; });
       })
-      .then(function(){
+      .then(function(payload){
+        _spSetLastSyncTs(payload.savedAt);
         var now = new Date();
         _spSetStatus('☁ 已同步 ' + now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }), 'ok');
       })
       .catch(function(err){
+        if(err && err.remoteNewer){
+          console.warn('SharePoint 偵測到雲端有這台裝置還不知道的更新版本，改為套用雲端版本，這次不推送：', err.remote);
+          _spApplyRemoteData(err.remote.data);
+          _spSetLastSyncTs(err.remote.savedAt);
+          _spSetStatus('☁ 偵測到其他裝置的更新，已套用雲端版本（點我重新整理畫面）', 'err',
+            '這台裝置原本要送出的資料比雲端舊，為了避免蓋掉別人剛存的資料，已改成套用雲端最新版本。點這裡重新整理頁面查看。');
+          return;
+        }
         console.error('SharePoint 同步失敗:', err);
         if(err && err.needsConsent){
           _spSetStatus('☁ 需要授權，點我連接 SharePoint', 'err', '第一次在這台裝置使用，點一下這個標籤，跳出視窗時按同意即可，之後就會自動同步');
@@ -4899,6 +4942,7 @@ function RVgrid(){
       .then(function(remote){
         if(remote && remote.data){
           _spApplyRemoteData(remote.data);
+          _spSetLastSyncTs(remote.savedAt);
           _spSetStatus('☁ 已從雲端載入（' + (remote.savedAt ? new Date(remote.savedAt).toLocaleString('zh-TW') : '') + '）', 'ok');
           if(forceRefreshUI){
             setTimeout(function(){ window.location.reload(); }, 500);
