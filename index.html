@@ -334,6 +334,40 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     </div>
   </div>
 </div>
+<!-- SharePoint 同步設定 Panel (admin only) -->
+<div class="mgmt-ov" id="sp-cfg-modal">
+  <div class="mgmt-pn">
+    <div class="mgmt-hd">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M5 17a4 4 0 010-8 5 5 0 019.6-1.8A4.5 4.5 0 0119 16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span style="font-size:15px;font-weight:700">SharePoint 同步設定</span>
+      <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:18px" onclick="document.getElementById('sp-cfg-modal').classList.remove('open')">×</button>
+    </div>
+    <div class="mgmt-bd">
+      <div class="al al-tl" style="margin-bottom:16px;font-size:12px">
+        <svg width="14" height="14" fill="none" viewBox="0 0 16 16" style="flex-shrink:0"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l2 2 3-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>資料會自動同步到這裡設定的 SharePoint 資料夾。「文件庫網址名稱」請打開目標資料夾，看瀏覽器網址列在網站路徑後面、下一個斜線前面的那一段（例如 .../sites/c-level2/<b>DocLib3</b>/Forms/...，就填 DocLib3）。設定只存在這台電腦／瀏覽器，其他電腦要另外設定一次。</span>
+      </div>
+      <label style="font-size:13px;font-weight:500;display:block;margin-bottom:12px">SharePoint 網站網址
+        <input class="fs" id="sp-cfg-site" placeholder="https://lalaso.sharepoint.com/sites/c-level2/" style="width:100%;margin-top:4px">
+      </label>
+      <label style="font-size:13px;font-weight:500;display:block;margin-bottom:12px">文件庫網址名稱
+        <input class="fs" id="sp-cfg-lib" placeholder="DocLib3" style="width:100%;margin-top:4px">
+      </label>
+      <label style="font-size:13px;font-weight:500;display:block;margin-bottom:12px">資料夾路徑（用 / 分隔）
+        <input class="fs" id="sp-cfg-folder" placeholder="Claude/LALASO CRM/JSON" style="width:100%;margin-top:4px">
+      </label>
+      <label style="font-size:13px;font-weight:500;display:block;margin-bottom:12px">檔案名稱
+        <input class="fs" id="sp-cfg-file" placeholder="swim-crm-data.json" style="width:100%;margin-top:4px">
+      </label>
+      <div id="sp-cfg-test-result" style="font-size:12px;margin-top:4px;display:none;padding:8px 10px;border-radius:var(--r)"></div>
+    </div>
+    <div class="mgmt-ft">
+      <button class="btn bs sm" onclick="document.getElementById('sp-cfg-modal').classList.remove('open')">取消</button>
+      <button class="btn bs sm" id="sp-cfg-test-btn" onclick="spCfgTest()">測試連線</button>
+      <button class="btn bp sm" onclick="spCfgSave()">儲存並套用</button>
+    </div>
+  </div>
+</div>
 <!-- MSAL Login Screen -->
 <div id="msal-login-screen">
   <div class="msal-card">
@@ -1557,6 +1591,14 @@ function applyRoleUI(role, email, name){
       btn.innerHTML = "&#9881; 帳號管理";
       btn.onclick = mgmtOpen;
       uArea.appendChild(btn);
+      if(typeof spCfgOpen === "function"){
+        var spBtn = document.createElement("button");
+        spBtn.className = "btn bs sm";
+        spBtn.style.marginLeft = "4px";
+        spBtn.innerHTML = "&#9729; 同步設定";
+        spBtn.onclick = spCfgOpen;
+        uArea.appendChild(spBtn);
+      }
     }
     document.querySelectorAll(".ni").forEach(function(n){ n.style.display=""; });
     G("students");
@@ -4603,16 +4645,17 @@ function RVgrid(){
 // 上的 JSON 檔；登入後、第一次載入資料前，先從 SharePoint 拉回最新版本，
 // 讓不同電腦開啟這個工具時能看到同一份資料。
 //
-// 若之後要調整同步位置，只要改下面 SP_SITE_HOST / SP_SITE_PATH /
-// SP_LIBRARY_NAME / SP_FOLDER_SEGMENTS 這幾個設定值即可。
+// 同步位置可以在畫面右上角「☁ 同步設定」裡調整（管理員可見），設定會存在
+// 這台瀏覽器的 localStorage（sp_sync_cfg，不是 crm_ 開頭，不會被同步上傳）。
+// 下面這組是設定被清空／第一次使用時的預設值。
 (function(){
-  var SP_SITE_HOST = "lalaso.sharepoint.com";
-  var SP_SITE_PATH = "/sites/c-level2";
-  // 文件庫的「內部名稱」（網址中顯示的是這個，左側導覽顯示的中文名稱是「營運管理」）
-  var SP_LIBRARY_NAME = "DocLib";
-  // 資料夾路徑（對應畫面上的 營運管理 > Claude > LALASO CRM > JSON）
-  var SP_FOLDER_SEGMENTS = ["Claude", "LALASO CRM", "JSON"];
-  var SP_FILE_NAME = "swim-crm-data.json";
+  var SP_DEFAULT_CFG = {
+    site: "https://lalaso.sharepoint.com/sites/c-level2/",
+    lib: "DocLib3",
+    folder: "Claude/LALASO CRM/JSON",
+    file: "swim-crm-data.json"
+  };
+  var SP_CFG_KEY = "sp_sync_cfg";
   var SP_SCOPES = ["Sites.ReadWrite.All"];
   var SP_PUSH_DEBOUNCE_MS = 2500;
   var SP_PULL_TIMEOUT_MS = 8000;
@@ -4624,6 +4667,39 @@ function RVgrid(){
   var _spPushQueued = false;
   var _spPulledOnce = false;
   var _spApplyingRemote = false;
+
+  function _spGetConfig(){
+    try{
+      var raw = localStorage.getItem(SP_CFG_KEY);
+      if(raw){
+        var saved = JSON.parse(raw);
+        return {
+          site: saved.site || SP_DEFAULT_CFG.site,
+          lib: saved.lib || SP_DEFAULT_CFG.lib,
+          folder: (saved.folder != null) ? saved.folder : SP_DEFAULT_CFG.folder,
+          file: saved.file || SP_DEFAULT_CFG.file
+        };
+      }
+    }catch(e){}
+    return { site: SP_DEFAULT_CFG.site, lib: SP_DEFAULT_CFG.lib, folder: SP_DEFAULT_CFG.folder, file: SP_DEFAULT_CFG.file };
+  }
+
+  function _spSetConfig(cfg){
+    _spOrigSetItem.call(localStorage, SP_CFG_KEY, JSON.stringify(cfg));
+    _spDriveId = null;
+    _spResolvedInfo = null;
+  }
+
+  function _spParseSite(siteUrl){
+    // 接受 https://xxx.sharepoint.com/sites/yyy 或含尾端斜線／多餘路徑
+    var m = String(siteUrl || '').match(/^https?:\/\/([^\/]+)(\/sites\/[^\/]+)/i);
+    if(!m) return null;
+    return { host: m[1], path: m[2] };
+  }
+
+  function _spFolderSegments(cfg){
+    return String(cfg.folder || '').split('/').map(function(s){ return s.trim(); }).filter(function(s){ return s.length; });
+  }
 
   function _spStatusEl(){ return document.getElementById('sp-sync-status'); }
 
@@ -4673,9 +4749,13 @@ function RVgrid(){
     });
   }
 
-  function _spResolveDrive(token){
+  // 解析文件庫：用「網址名稱」跟每個 drive 的 webUrl 最後一段做完全比對
+  // （不能只做包含比對，因為像 DocLib / DocLib2 / DocLib3 這種名稱會互相包含）
+  function _spResolveDrive(token, cfg){
     if(_spDriveId) return Promise.resolve(_spDriveId);
-    var siteUrl = 'https://graph.microsoft.com/v1.0/sites/' + SP_SITE_HOST + ':' + SP_SITE_PATH;
+    var siteInfo = _spParseSite(cfg.site);
+    if(!siteInfo) return Promise.reject(new Error('SharePoint 網站網址格式看起來不對：' + cfg.site));
+    var siteUrl = 'https://graph.microsoft.com/v1.0/sites/' + siteInfo.host + ':' + siteInfo.path;
     return _spGraphFetch(siteUrl, {}, token)
       .then(function(r){ return r.json(); })
       .then(function(site){
@@ -4683,12 +4763,17 @@ function RVgrid(){
         var drivesUrl = 'https://graph.microsoft.com/v1.0/sites/' + siteId + '/drives';
         return _spGraphFetch(drivesUrl, {}, token).then(function(r){ return r.json(); }).then(function(dl){
           var drives = dl.value || [];
-          var match = drives.filter(function(d){ return (d.name || '').toLowerCase() === SP_LIBRARY_NAME.toLowerCase(); })[0];
+          var wantLib = (cfg.lib || '').toLowerCase();
+          var match = drives.filter(function(d){
+            var seg = String(d.webUrl || '').replace(/\/$/, '').split('/').pop() || '';
+            return seg.toLowerCase() === wantLib;
+          })[0];
           if(!match){
-            match = drives.filter(function(d){ return (d.webUrl || '').toLowerCase().indexOf('/' + SP_LIBRARY_NAME.toLowerCase()) >= 0; })[0];
+            match = drives.filter(function(d){ return (d.name || '').toLowerCase() === wantLib; })[0];
           }
           if(!match){
-            throw new Error('在網站中找不到名為「' + SP_LIBRARY_NAME + '」的文件庫（現有文件庫：' + drives.map(function(d){ return d.name; }).join('、') + '）');
+            throw new Error('在網站中找不到網址名稱為「' + cfg.lib + '」的文件庫（現有文件庫：' +
+              drives.map(function(d){ return (String(d.webUrl||'').split('/').pop()) + '(' + d.name + ')'; }).join('、') + '）');
           }
           _spDriveId = match.id;
           _spResolvedInfo = { siteId: siteId, driveId: match.id, driveName: match.name, driveWebUrl: match.webUrl };
@@ -4697,9 +4782,9 @@ function RVgrid(){
       });
   }
 
-  function _spItemUrl(){
+  function _spItemUrl(cfg){
     return 'https://graph.microsoft.com/v1.0/drives/' + _spDriveId + '/root:/' +
-      _spEncodePath(SP_FOLDER_SEGMENTS.concat([SP_FILE_NAME])) + ':/content';
+      _spEncodePath(_spFolderSegments(cfg).concat([cfg.file])) + ':/content';
   }
 
   function _spCollectLocalData(){
@@ -4732,15 +4817,16 @@ function RVgrid(){
     if(_spPushInFlight){ _spPushQueued = true; return; }
     _spPushInFlight = true;
     _spSetStatus('☁ 同步中…', 'syncing');
+    var cfg = _spGetConfig();
     _spGetToken()
-      .then(function(token){ return _spResolveDrive(token).then(function(){ return token; }); })
+      .then(function(token){ return _spResolveDrive(token, cfg).then(function(){ return token; }); })
       .then(function(token){
         var payload = {
           savedAt: new Date().toISOString(),
           by: (typeof _msalEmail !== 'undefined' ? _msalEmail : ''),
           data: _spCollectLocalData()
         };
-        return _spGraphFetch(_spItemUrl(), {
+        return _spGraphFetch(_spItemUrl(cfg), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -4778,10 +4864,11 @@ function RVgrid(){
 
   function _spPull(){
     _spSetStatus('☁ 讀取雲端資料中…', 'syncing');
+    var cfg = _spGetConfig();
     return _spGetToken()
-      .then(function(token){ return _spResolveDrive(token).then(function(){ return token; }); })
+      .then(function(token){ return _spResolveDrive(token, cfg).then(function(){ return token; }); })
       .then(function(token){
-        return _spGraphFetch(_spItemUrl(), { method: 'GET' }, token)
+        return _spGraphFetch(_spItemUrl(cfg), { method: 'GET' }, token)
           .then(function(r){ return r.json(); })
           .catch(function(err){
             if(err && err.status === 404) return null; // 第一次同步，雲端還沒有檔案
@@ -4833,13 +4920,79 @@ function RVgrid(){
     _statusClickEl.addEventListener('click', function(){ _spPush(); });
   }
 
+  // ── 同步設定面板（管理員可見，見畫面右上角「☁ 同步設定」按鈕）──────────
+  window.spCfgOpen = function(){
+    var cfg = _spGetConfig();
+    document.getElementById('sp-cfg-site').value = cfg.site;
+    document.getElementById('sp-cfg-lib').value = cfg.lib;
+    document.getElementById('sp-cfg-folder').value = cfg.folder;
+    document.getElementById('sp-cfg-file').value = cfg.file;
+    var res = document.getElementById('sp-cfg-test-result');
+    res.style.display = 'none';
+    document.getElementById('sp-cfg-modal').classList.add('open');
+  };
+
+  function _spCfgReadForm(){
+    return {
+      site: document.getElementById('sp-cfg-site').value.trim(),
+      lib: document.getElementById('sp-cfg-lib').value.trim(),
+      folder: document.getElementById('sp-cfg-folder').value.trim(),
+      file: document.getElementById('sp-cfg-file').value.trim() || SP_DEFAULT_CFG.file
+    };
+  }
+
+  window.spCfgTest = function(){
+    var cfg = _spCfgReadForm();
+    var res = document.getElementById('sp-cfg-test-result');
+    res.style.display = 'block';
+    res.className = '';
+    res.style.background = 'var(--bl-bg)';
+    res.style.color = 'var(--bl)';
+    res.textContent = '測試中…';
+    var savedDriveId = _spDriveId; // 暫存，測試不覆蓋現有已生效設定的快取
+    _spDriveId = null;
+    _spGetToken()
+      .then(function(token){ return _spResolveDrive(token, cfg); })
+      .then(function(){
+        res.style.background = 'var(--tl-bg)';
+        res.style.color = 'var(--tl)';
+        res.textContent = '✓ 連線成功，已找到文件庫「' + _spResolvedInfo.driveName + '」（' + _spResolvedInfo.driveWebUrl + '）。請確認資料夾路徑與檔名無誤後按「儲存並套用」。';
+      })
+      .catch(function(err){
+        res.style.background = 'var(--rd-bg)';
+        res.style.color = 'var(--rd)';
+        res.textContent = '✗ ' + String((err && err.message) || err);
+      })
+      .then(function(){
+        _spDriveId = savedDriveId;
+      });
+  };
+
+  window.spCfgSave = function(){
+    var cfg = _spCfgReadForm();
+    if(!_spParseSite(cfg.site)){
+      alert('網站網址格式看起來不對，請確認是像 https://xxx.sharepoint.com/sites/yyy 這樣的格式');
+      return;
+    }
+    if(!cfg.lib){
+      alert('請填寫文件庫網址名稱');
+      return;
+    }
+    _spSetConfig(cfg);
+    document.getElementById('sp-cfg-modal').classList.remove('open');
+    _spSetStatus('☁ 設定已更新，同步中…', 'syncing');
+    _spPush();
+  };
+
   // 除錯用：在瀏覽器主控台可呼叫 _spDebug() 查看目前解析到的網站/文件庫資訊，
   // 或呼叫 _spForceSync() / _spForcePull() 手動觸發同步。
   window._spDebug = function(){
-    return { resolved: _spResolvedInfo, driveId: _spDriveId, folder: SP_FOLDER_SEGMENTS.join('/'), file: SP_FILE_NAME };
+    var cfg = _spGetConfig();
+    return { config: cfg, resolved: _spResolvedInfo, driveId: _spDriveId };
   };
   window._spForceSync = _spPush;
   window._spForcePull = _spPull;
+  window._spGetConfig = _spGetConfig;
 })();
 
 </script>
