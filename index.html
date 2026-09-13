@@ -3898,9 +3898,15 @@ function RVtrialRender(){
   // 劃位試排這邊才會顯示成同一個樣子，不會自己重新按班別/老師代號排序
   if(typeof _ensureSlotCols==='function') _ensureSlotCols(slots);
 
+  var hallZh = hall==='X' ? '西屯' : '北屯';
+  // 依學員志願總覽的填表結果（去重複後）與拖曳指定結果，這兩個在整次畫面
+  // 重繪期間都不會變，先算好給下面所有 cell 共用
+  var dedupedByName = _trialDedupedByName();
+  var placements = _trialGetPlacements(hall);
+
   var BG  = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
   var FG  = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var TBG = '#EEF2FF', TW=52, CW=80, HH=24, SH=20;
+  var TBG = '#EEF2FF', TW=52, CW=80, WLCW=132, HH=24, SH=20;
   var DO  = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
   var DAY_SEP = '#6b7280'; // 每天之間的分隔線顏色，比一般格線 #ccc 深很多，明顯區隔開每一天
@@ -3929,44 +3935,108 @@ function RVtrialRender(){
   }
   function slotIdx(sl){ return slots.indexOf(sl); }
 
+  // 對照學員志願總覽的填表結果，算出這個班次「畫面上」該顯示的名單──
+  // 這整段只影響顯示，不會動到 sl.students 這個真正存檔的資料：
+  // - 原本用「帶入原班學員」帶進來的學員（_trial==='keep'），若填表結果是
+  //   不續報/換班續報，就不顯示在正常名單裡，改成在下面用小灰字列出姓名
+  //   及備註；這個座位視覺上讓出來
+  // - 讓出來的座位（連同原本就空的座位）優先給已經被拖曳指定到這個班次的
+  //   候補學員（橘底紅字），其餘才顯示成一般空位
+  function buildDisplayRows(sl, idx){
+    var footnotes=[];
+    var queue=Object.keys(placements).filter(function(n){ return placements[n]===idx; });
+    var rows=[];
+    sl.students.forEach(function(s){
+      if(s.empty){
+        if(queue.length) rows.push({type:'student', name:queue.shift(), trial:'switchin'});
+        else rows.push({type:'empty'});
+        return;
+      }
+      var resolved=dedupedByName[s.name];
+      var planStatus=resolved?resolved.plan:null;
+      if(s._trial==='keep' && (planStatus==='rest' || planStatus==='change')){
+        footnotes.push({name:s.name, note: planStatus==='rest' ? '不續報' : '換班'});
+        if(queue.length) rows.push({type:'student', name:queue.shift(), trial:'switchin'});
+        else rows.push({type:'empty'});
+        return;
+      }
+      var trial=s._trial;
+      if(s._trial==='keep' && planStatus==='same') trial='same';
+      rows.push({type:'student', name:s.name, trial:trial});
+    });
+    queue.forEach(function(n){ rows.push({type:'student', name:n, trial:'switchin'}); });
+    return {rows:rows, footnotes:footnotes};
+  }
+
   function slotCell(sl){
     if(!sl) return '<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #e0e0e0;background:#fafafa"></td>';
     var idx=slotIdx(sl);
     var bg=BG[sl.cls]||'#fff', fg=FG[sl.cls]||'#333';
-    var filled=sl.students.filter(function(s){return !s.empty;}).length;
+    var disp=buildDisplayRows(sl, idx);
+    var filled=disp.rows.filter(function(r){return r.type==='student';}).length;
     var cap=sl.students.length;
-    var h='<td style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0">';
+    var h='<td ondragover="RVtrialAllowDrop(event)" ondrop="RVtrialDropClass(event,\''+hall+'\','+idx+')" style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px;border:1px solid #ccc;vertical-align:top;padding:0">';
     // Header: class badge + teacher + fill count + right-click hint
     h+='<div oncontextmenu="RVtrialCtx(event,\''+hall+'\','+idx+')" style="background:'+bg+';height:'+HH+'px;display:flex;align-items:center;gap:4px;padding:0 6px;border-bottom:1px solid #ccc;cursor:context-menu">';
     h+='<span style="width:18px;height:18px;border-radius:50%;background:'+fg+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+sl.cls+'</span>';
     h+='<span style="font-size:11px;color:#444;font-weight:600">'+sl.teacher+'</span>';
     h+='<span style="font-size:10px;color:#999;margin-left:auto">'+filled+'/'+cap+'</span>';
     h+='</div>';
-    // Students
-    sl.students.forEach(function(s){
-      if(s.empty){
+    // Students（含被拖曳指定進來的候補生）
+    disp.rows.forEach(function(r){
+      if(r.type==='empty'){
         h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;color:#ddd;font-size:11px">—</div>';
-      } else {
-        var nameColor = s._trial==='keep'?'color:#C62828;font-weight:600' : s._trial==='new'?'color:#E65100;font-weight:600' : 'color:#333';
-        h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;font-size:11px;'+nameColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.name+'</div>';
+        return;
       }
+      if(r.trial==='switchin'){
+        h+='<div draggable="true" ondragstart="RVtrialDragStart(event,\''+r.name.replace(/'/g,"\\'")+'\')" style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;font-size:11px;background:#FFE0B2;color:#C62828;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:grab">'+r.name+'</div>';
+        return;
+      }
+      var nameColor = (r.trial==='keep'||r.trial==='same') ? 'color:#C62828;font-weight:600;background:#fff' : r.trial==='new' ? 'color:#E65100;font-weight:600' : 'color:#333';
+      h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;font-size:11px;'+nameColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.name+'</div>';
+    });
+    // 不續報／換班的原班學員，小灰字列在下面備查
+    disp.footnotes.forEach(function(f){
+      h+='<div style="padding:1px 5px;font-size:9px;color:#bbb;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+f.name+'（'+f.note+'）</div>';
     });
     h+='</td>';
     return h;
   }
 
+  // 換班續報候補名單欄：這個時段所有候補人選（依 N,A,B,C,D,E,F 合併），
+  // 已經被拖進某班的人不會再出現在這裡（代表他已經有位置了）
+  function waitlistCell(day, time){
+    var candidates=_trialCandidatesForSlot(hallZh, day, time, dedupedByName, placements);
+    var w='<td ondragover="RVtrialAllowDrop(event)" ondrop="RVtrialDropWaitlist(event,\''+hall+'\')" style="width:'+WLCW+'px;min-width:'+WLCW+'px;max-width:'+WLCW+'px;border:1px solid #ccc;vertical-align:top;padding:0;background:#FBFAFE">';
+    w+='<div style="background:#EEE6F5;height:'+HH+'px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #ccc">';
+    w+='<span style="font-size:11px;color:#7B4FA0;font-weight:700">候補中</span></div>';
+    w+='<div style="padding:2px 3px;min-height:'+SH+'px">';
+    if(!candidates.length){
+      w+='<div style="font-size:10px;color:#ccc;text-align:center;padding:3px 0">—</div>';
+    } else {
+      candidates.forEach(function(p,i){
+        w+='<div draggable="true" ondragstart="RVtrialDragStart(event,\''+p.name.replace(/'/g,"\\'")+'\')" style="cursor:grab;margin-bottom:2px">'+buildPerson(p,i,true)+'</div>';
+      });
+    }
+    w+='</div></td>';
+    return w;
+  }
+
   function buildSection(days, times, isSat){
-    var nc=days.length*SUBCOLS;
-    var tableW=TW+nc*CW;
+    var nc=days.length*(SUBCOLS+1);
+    var tableW=TW+days.length*(SUBCOLS*CW+WLCW);
     var t='<table style="border-collapse:collapse;table-layout:fixed;font-size:12px;width:'+tableW+'px;min-width:'+tableW+'px">';
     t+='<colgroup><col style="width:'+TW+'px;min-width:'+TW+'px;max-width:'+TW+'px">';
-    for(var i=0;i<nc;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
+    days.forEach(function(){
+      for(var i=0;i<SUBCOLS;i++) t+='<col style="width:'+CW+'px;min-width:'+CW+'px;max-width:'+CW+'px">';
+      t+='<col style="width:'+WLCW+'px;min-width:'+WLCW+'px;max-width:'+WLCW+'px">';
+    });
     t+='</colgroup><thead style="position:sticky;top:0;z-index:10"><tr>';
     var sth=isSat?'':'position:sticky;left:0;z-index:20;';
     t+='<th rowspan="2" style="'+sth+'width:'+TW+'px;border:1px solid #ccc;background:'+TBG+';font-size:11px;color:#555;text-align:center;vertical-align:middle">時段</th>';
     days.forEach(function(d,di){
       var dayBorder=di>0?';border-left:3px solid '+DAY_SEP:'';
-      t+='<th colspan="'+SUBCOLS+'" style="width:'+(SUBCOLS*CW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0'+dayBorder+'">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
+      t+='<th colspan="'+(SUBCOLS+1)+'" style="width:'+(SUBCOLS*CW+WLCW)+'px;border:1px solid #ccc;background:#e8edf8;font-size:13px;font-weight:700;text-align:center;padding:5px 0'+dayBorder+'">週'+d+' <span style="font-size:10px;font-weight:400;color:#888">('+DAY[d]+')</span></th>';
     });
     t+='</tr><tr>';
     days.forEach(function(d,di){
@@ -3974,6 +4044,7 @@ function RVtrialRender(){
         var dayBorder=(di>0&&si===0)?';border-left:3px solid '+DAY_SEP:'';
         t+='<th style="width:'+CW+'px;border:1px solid #ccc;background:#f0f4ff;font-size:11px;color:#999;text-align:center;padding:3px 0'+dayBorder+'">班別</th>';
       }
+      t+='<th style="width:'+WLCW+'px;border:1px solid #ccc;background:#f2ecfa;font-size:11px;color:#7B4FA0;text-align:center;padding:3px 0">候補</th>';
     });
     t+='</tr></thead><tbody>';
     var pg=-1;
@@ -3996,17 +4067,20 @@ function RVtrialRender(){
             slAtCol = ds[si] || null;
           }
           var cellStr=slotCell(slAtCol);
-          // 加在 style 屬性結尾，避免被 cell 本身的 border:1px solid ... 簡寫蓋掉
-          if(di>0&&si===0) cellStr=cellStr.replace(/^(<td style="[^"]*)"/, '$1;border-left:3px solid '+DAY_SEP+'"');
-          t+=cellStr;
+          // 加在 style 屬性開頭；用一般字串取代（只換第一個 style="）而不是
+          // 只認定它一定緊接在 <td 後面──cell 現在多了 ondragover/ondrop
+          // 屬性，位置不再固定在最前面
+          if(di>0&&si===0) cellStr=cellStr.replace('style="', 'style="border-left:3px solid '+DAY_SEP+';');
+        t+=cellStr;
         }
+        t+=waitlistCell(d,time);
       });
       t+='</tr>';
     });
     return t+'</tbody></table>';
   }
 
-  var wdW=TW+wdDays.length*SUBCOLS*CW, saW=TW+SUBCOLS*CW;
+  var wdW=TW+wdDays.length*(SUBCOLS*CW+WLCW), saW=TW+(SUBCOLS*CW+WLCW);
   var wdHTML=wdTimes.length?buildSection(wdDays,wdTimes,false):'';
   var saHTML=(hasSat&&saTimes.length)?buildSection(['六'],saTimes,true):'';
 
@@ -4014,6 +4088,188 @@ function RVtrialRender(){
     (wdHTML?'<div style="flex:0 0 '+wdW+'px;width:'+wdW+'px">'+wdHTML+'</div>':'')+
     (saHTML?'<div style="flex:0 0 '+saW+'px;width:'+saW+'px">'+saHTML+'</div>':'')+
     '</div>';
+  attachTrialTooltips();
+}
+
+// ── (4)(5)(6) 換班候補拖曳：學員志願比對、候補名單、拖曳指定 ──────────────
+// 這裡的資料一律不寫回 sl.students（那是真正存檔用的班表資料），只用一組
+// 獨立的 placements 對照表記「候補學員被拖進哪個班次(slotIdx)」，畫面重繪
+// 時再即時算出誰該顯示在哪裡──這樣拖曳／取消都可以隨便試，不會弄壞原始
+// 班表或候補名單資料本身。
+
+// 依 RVbuildWL() 同一套「重複填單取最新（或使用者手動選擇）」邏輯，算出
+// 每個學員姓名目前生效的填表結果，用來判斷不續報/原班續報/換班續報
+function _trialDedupedByName(){
+  var byName={};
+  RV_RAW.forEach(function(e){
+    if(!byName[e.name]) byName[e.name]=[];
+    byName[e.name].push(e);
+  });
+  var out={};
+  Object.keys(byName).forEach(function(name){
+    var entries=byName[name];
+    entries.sort(function(a,b){ return a.submit>b.submit?-1:1; });
+    if(entries.length===1){ out[name]=entries[0]; return; }
+    var choice=RV_CHOICES[name];
+    if(choice===-1) return; // 已排除，視同無填表結果
+    var idx=(choice==null)?0:choice;
+    if(entries[idx]) out[name]=entries[idx];
+  });
+  return out;
+}
+
+function _trialPlacementsKey(hall){ return 'crm_trial_wl_'+hall+'_'+_curSeason; }
+
+function _trialGetPlacements(hall){
+  try{
+    var raw=localStorage.getItem(_trialPlacementsKey(hall));
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {};
+}
+
+function _trialSetPlacements(hall, placements){
+  try{ localStorage.setItem(_trialPlacementsKey(hall), JSON.stringify(placements)); }catch(e){}
+}
+
+var _TRIAL_CLS_LETTERS=['N','A','B','C','D','E','F'];
+var _TRIAL_LETTER_LABEL={A:'親子A',B:'親子B',C:'幼兒C',D:'幼兒D',E:'兒童E',F:'兒童F'};
+
+// 換班續報的學員只填了想換的時段、沒有指定老師，所以候補名單是「這一天這
+// 個時段、依 N,A,B,C,D,E,F 順序合併所有班別」的所有候補人選，不分某個特
+// 定班次；已經被拖進某個班次（placements 裡有記錄）的人就不會再出現在候
+// 補名單，代表他已經有位置了、不需要候補
+function _trialCandidatesForSlot(hallZh, day, time, dedupedByName, placements){
+  var slotStr='週'+day+' '+time;
+  var out=[];
+  _TRIAL_CLS_LETTERS.forEach(function(letter){
+    var label=_TRIAL_LETTER_LABEL[letter];
+    if(!label) return; // N 沒有對應的候補志願欄位
+    var key=hallZh+label;
+    var lst=RV_WL[key]||[];
+    lst.forEach(function(item){
+      if(placements[item.name]!=null) return;
+      var resolved=dedupedByName[item.name];
+      if(!resolved || resolved.plan!=='change') return;
+      (item.slots||[]).forEach(function(s){
+        if(s.slot!==slotStr) return;
+        out.push({
+          name:item.name, home:item.home, slot_rank:s.rank, submit:item.submit,
+          slots_all:item.slots, fallback:item.fallback, cls_label:label, hall_label:hallZh
+        });
+      });
+    });
+  });
+  return out;
+}
+
+// 這個班次目前「畫面上」還空著幾個座位（原本就空的 + 因不續報/換班而讓出
+// 來的），扣掉已經被拖進來的候補人數，就是還能再拖進幾個人
+function _trialAvailableSeats(hall, slotIdx, dedupedByName, placements){
+  var slots=hall==='X'?SLOTS_X:SLOTS_B;
+  var sl=slots[slotIdx];
+  if(!sl) return 0;
+  var free=0;
+  sl.students.forEach(function(s){
+    if(s.empty){ free++; return; }
+    if(s._trial==='keep'){
+      var resolved=dedupedByName[s.name];
+      var planStatus=resolved?resolved.plan:null;
+      if(planStatus==='rest'||planStatus==='change') free++;
+    }
+  });
+  var placedCount=0;
+  Object.keys(placements).forEach(function(n){ if(placements[n]===slotIdx) placedCount++; });
+  return free-placedCount;
+}
+
+function RVtrialAssignCandidate(hall, name, slotIdx){
+  var slots=hall==='X'?SLOTS_X:SLOTS_B;
+  if(!slots[slotIdx]) return;
+  var dedupedByName=_trialDedupedByName();
+  var placements=_trialGetPlacements(hall);
+  var already=(placements[name]===slotIdx);
+  delete placements[name];
+  if(!already && _trialAvailableSeats(hall, slotIdx, dedupedByName, placements)<=0){
+    alert('此班已無空位');
+    return;
+  }
+  placements[name]=slotIdx;
+  _trialSetPlacements(hall, placements);
+  RVtrialRender();
+}
+
+function RVtrialUnassignCandidate(hall, name){
+  var placements=_trialGetPlacements(hall);
+  if(placements[name]==null) return;
+  delete placements[name];
+  _trialSetPlacements(hall, placements);
+  RVtrialRender();
+}
+
+var _trialDragName=null;
+function RVtrialDragStart(ev, name){
+  _trialDragName=name;
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', name); }catch(e){}
+}
+function RVtrialAllowDrop(ev){ ev.preventDefault(); }
+function RVtrialDropClass(ev, hall, slotIdx){
+  ev.preventDefault();
+  var name=_trialDragName;
+  try{ var dt=ev.dataTransfer.getData('text/plain'); if(dt) name=dt; }catch(e){}
+  _trialDragName=null;
+  if(!name) return;
+  RVtrialAssignCandidate(hall, name, slotIdx);
+}
+function RVtrialDropWaitlist(ev, hall){
+  ev.preventDefault();
+  var name=_trialDragName;
+  try{ var dt=ev.dataTransfer.getData('text/plain'); if(dt) name=dt; }catch(e){}
+  _trialDragName=null;
+  if(!name) return;
+  RVtrialUnassignCandidate(hall, name);
+}
+
+function attachTrialTooltips(){
+  var tip=document.getElementById('rv-trial-tip');
+  if(!tip){
+    tip=document.createElement('div');
+    tip.id='rv-trial-tip';
+    tip.style.cssText="display:none;position:fixed;z-index:600;background:var(--sf);border:1px solid var(--bd2);border-radius:var(--rl);padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:230px;max-width:300px;font-size:12px;pointer-events:none";
+    document.body.appendChild(tip);
+  }
+  var body=document.getElementById('rv-trial-body');
+  if(!body) return;
+  function pc(r){ return r===1?"var(--tl)":r===2?"var(--bl)":r===3?"var(--am)":"var(--tx3)"; }
+  body.querySelectorAll(".rv-cell-person").forEach(function(el){
+    el.addEventListener("mouseenter", function(){
+      var sr=parseInt(el.dataset.slotrank)||1;
+      var th="<div style='font-weight:700;font-size:13px;margin-bottom:5px'>"+el.dataset.name+"</div>";
+      th+="<div style='font-size:11px;color:var(--tx3);margin-bottom:7px'>"+el.dataset.home+"館";
+      if(el.dataset.cls) th+=" · "+el.dataset.cls;
+      th+=" · 本格 <span style='color:"+pc(sr)+";font-weight:700'>志"+sr+"</span></div>";
+      th+="<div style='font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:3px'>所有志願時段</div>";
+      (el.dataset.allslots||"").split("|").forEach(function(s){
+        if(!s) return;
+        var dot=s.indexOf(".");
+        var label=s.slice(0,dot), slotTxt=s.slice(dot+1).trim();
+        var rankNum=parseInt(label.replace("志",""))||1;
+        th+="<div style='padding:2px 0;font-size:12px'>";
+        th+="<span style='color:"+pc(rankNum)+";font-weight:700;margin-right:5px'>"+label+"</span>";
+        th+="<span style='color:var(--tx2)'>"+slotTxt+"</span></div>";
+      });
+      th+="<div style='margin-top:8px;padding-top:7px;border-top:1px solid var(--bd);font-size:11px;color:var(--tx3)'>填單："+el.dataset.submit+"</div>";
+      if(el.dataset.fallback) th+="<div style='font-size:11px;color:var(--tx3)'>後備："+el.dataset.fallback+"</div>";
+      tip.innerHTML=th;
+      tip.style.display="block";
+      var rect=el.getBoundingClientRect();
+      var left=rect.right+10;
+      if(left+270>window.innerWidth) left=rect.left-280;
+      tip.style.left=left+"px";
+      tip.style.top=Math.min(rect.top, window.innerHeight-320)+"px";
+    });
+    el.addEventListener("mouseleave", function(){ tip.style.display="none"; });
+  });
 }
 
 function RVtrialCtx(e, hall, slotIdx){
