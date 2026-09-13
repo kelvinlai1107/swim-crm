@@ -3683,7 +3683,7 @@ function RVbuildWL(){
       var key = wl_item.hall + wl_item.class;
       if(!wl[key]) wl[key]=[];
       wl[key].push({
-        name:e.name, home:e.hall, submit:e.submit, fallback:e.fallback, slots:wl_item.slots
+        name:e.name, home:e.hall, submit:e.submit, fallback:e.fallback, slots:wl_item.slots, cur_cls:e.cur_cls
       });
     });
   });
@@ -3906,7 +3906,7 @@ function RVtrialRender(){
 
   var BG  = {A:'#FFF0F0',B:'#FFF0F0',N:'#FFF0F0',C:'#FFFDF0',D:'#FFFDF0',E:'#F0FAF0',F:'#F0FAF0'};
   var FG  = {A:'#E53935',B:'#E53935',N:'#E53935',C:'#BF8F00',D:'#BF8F00',E:'#388E3C',F:'#388E3C'};
-  var TBG = '#EEF2FF', TW=52, CW=80, WLCW=132, HH=24, SH=20;
+  var TBG = '#EEF2FF', TW=52, CW=80, WLCW=88, HH=24, SH=20;
   var DO  = {'二':0,'三':1,'四':2,'五':3,'六':4};
   var DAY = {'二':'TUE','三':'WED','四':'THU','五':'FRI','六':'SAT'};
   var DAY_SEP = '#6b7280'; // 每天之間的分隔線顏色，比一般格線 #ccc 深很多，明顯區隔開每一天
@@ -3995,9 +3995,15 @@ function RVtrialRender(){
       var nameColor = (r.trial==='keep'||r.trial==='same') ? 'color:#C62828;font-weight:600;background:#fff' : r.trial==='new' ? 'color:#E65100;font-weight:600' : 'color:#333';
       h+='<div style="height:'+SH+'px;border-bottom:1px solid #f0f0f0;padding:1px 5px;font-size:11px;'+nameColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.name+'</div>';
     });
-    // 不續報／換班的原班學員，小灰字列在下面備查
+    // 不續報／換班的原班學員，小灰字列在下面備查——換班的字體稍大一點、顏色
+    // 深一點並加粗，跟不續報做出區隔；換班的姓名滑鼠移上去還會顯示他換班的
+    // 候補志願（attachTrialFootnoteTooltips 負責掛上去）
     disp.footnotes.forEach(function(f){
-      h+='<div style="padding:1px 5px;font-size:9px;color:#bbb;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+f.name+'（'+f.note+'）</div>';
+      if(f.note==='換班'){
+        h+='<div class="trial-fn-change" data-fn-name="'+f.name+'" style="padding:1px 5px;font-size:10.5px;color:#8a8a8a;font-weight:700;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help">'+f.name+'（換班）</div>';
+      } else {
+        h+='<div style="padding:1px 5px;font-size:9px;color:#bbb;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+f.name+'（'+f.note+'）</div>';
+      }
     });
     h+='</td>';
     return h;
@@ -4015,7 +4021,7 @@ function RVtrialRender(){
       w+='<div style="font-size:10px;color:#ccc;text-align:center;padding:3px 0">—</div>';
     } else {
       candidates.forEach(function(p,i){
-        w+='<div draggable="true" ondragstart="RVtrialDragStart(event,\''+p.name.replace(/'/g,"\\'")+'\')" style="cursor:grab;margin-bottom:2px">'+buildPerson(p,i,true)+'</div>';
+        w+='<div draggable="true" ondragstart="RVtrialDragStart(event,\''+p.name.replace(/'/g,"\\'")+'\')" style="cursor:grab;margin-bottom:2px">'+buildPerson(p,i,true,true)+'</div>';
       });
     }
     w+='</div></td>';
@@ -4089,6 +4095,7 @@ function RVtrialRender(){
     (saHTML?'<div style="flex:0 0 '+saW+'px;width:'+saW+'px">'+saHTML+'</div>':'')+
     '</div>';
   attachTrialTooltips();
+  attachTrialFootnoteTooltips(dedupedByName);
 }
 
 // ── (4)(5)(6) 換班候補拖曳：學員志願比對、候補名單、拖曳指定 ──────────────
@@ -4155,7 +4162,8 @@ function _trialCandidatesForSlot(hallZh, day, time, dedupedByName, placements){
         if(s.slot!==slotStr) return;
         out.push({
           name:item.name, home:item.home, slot_rank:s.rank, submit:item.submit,
-          slots_all:item.slots, fallback:item.fallback, cls_label:label, hall_label:hallZh
+          slots_all:item.slots, fallback:item.fallback, cls_label:label, hall_label:hallZh,
+          cur_cls:item.cur_cls
         });
       });
     });
@@ -4248,6 +4256,7 @@ function attachTrialTooltips(){
       th+="<div style='font-size:11px;color:var(--tx3);margin-bottom:7px'>"+el.dataset.home+"館";
       if(el.dataset.cls) th+=" · "+el.dataset.cls;
       th+=" · 本格 <span style='color:"+pc(sr)+";font-weight:700'>志"+sr+"</span></div>";
+      if(el.dataset.curcls) th+="<div style='font-size:11px;color:var(--tx3);margin-bottom:7px'>原班："+el.dataset.curcls+"</div>";
       th+="<div style='font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:3px'>所有志願時段</div>";
       (el.dataset.allslots||"").split("|").forEach(function(s){
         if(!s) return;
@@ -4267,6 +4276,53 @@ function attachTrialTooltips(){
       if(left+270>window.innerWidth) left=rect.left-280;
       tip.style.left=left+"px";
       tip.style.top=Math.min(rect.top, window.innerHeight-320)+"px";
+    });
+    el.addEventListener("mouseleave", function(){ tip.style.display="none"; });
+  });
+}
+
+// 換班學員被移除後列在班級下方的小灰字姓名，滑鼠移上去顯示他填的換班候補
+// 志願（跟學員志願總覽重複填單那邊的提示卡用同一套排版）
+function attachTrialFootnoteTooltips(dedupedByName){
+  var tip=document.getElementById('rv-trial-fn-tip');
+  if(!tip){
+    tip=document.createElement('div');
+    tip.id='rv-trial-fn-tip';
+    tip.style.cssText="display:none;position:fixed;z-index:600;background:var(--sf);border:1px solid var(--bd2);border-radius:var(--rl);padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:220px;max-width:300px;font-size:12px;pointer-events:none";
+    document.body.appendChild(tip);
+  }
+  var body=document.getElementById('rv-trial-body');
+  if(!body) return;
+  function pc(r){ return r===1?"var(--tl)":r===2?"var(--bl)":r===3?"var(--am)":"var(--tx3)"; }
+  body.querySelectorAll(".trial-fn-change").forEach(function(el){
+    el.addEventListener("mouseenter", function(){
+      var name=el.dataset.fnName;
+      var resolved=dedupedByName[name];
+      var th="<div style='font-weight:700;font-size:13px;margin-bottom:6px'>"+name+" <span style='font-size:11px;color:var(--tx3);font-weight:400'>換班志願</span></div>";
+      if(!resolved || !resolved.wls || !resolved.wls.length){
+        th+="<div style='font-size:11px;color:var(--tx3)'>無候補志願資料</div>";
+      } else {
+        resolved.wls.forEach(function(wl){
+          th+="<div style='margin-bottom:8px'>";
+          th+="<div style='font-size:11px;font-weight:700;color:var(--tx);background:var(--sf2);padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block'>"+wl.hall+wl.class+"</div>";
+          (wl.slots||[]).forEach(function(s){
+            th+="<div style='display:flex;align-items:center;gap:6px;padding:1px 0'>";
+            th+="<span style='font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;background:"+(s.rank===1?"var(--tl-bg)":s.rank===2?"var(--bl-bg)":s.rank===3?"var(--am-bg)":"var(--gy)")+";color:"+pc(s.rank)+"'>志"+s.rank+"</span>";
+            th+="<span style='color:var(--tx2)'>"+s.slot+"</span></div>";
+          });
+          th+="</div>";
+        });
+      }
+      tip.innerHTML=th;
+      tip.style.display="block";
+      var rect=el.getBoundingClientRect();
+      var left=rect.right+10, top=rect.top;
+      if(left+310>window.innerWidth-8) left=rect.left-320;
+      if(left<8) left=8;
+      if(top+260>window.innerHeight-8) top=window.innerHeight-268;
+      if(top<60) top=60;
+      tip.style.left=left+"px";
+      tip.style.top=top+"px";
     });
     el.addEventListener("mouseleave", function(){ tip.style.display="none"; });
   });
@@ -4717,7 +4773,7 @@ function RVheat(){
 }
 
 
-function buildPerson(p, idx, showCls){
+function buildPerson(p, idx, showCls, compact){
   // Card colors by fill-order rank
   function rankBg(i){ return i===0?"#0F7560":i===1?"#1A5FBA":i===2?"#9B6200":"#9E9D97"; }
   function cardBg(i){ return i===0?"#E8F5F2":i===1?"#EAF1FB":i===2?"#FEF3DC":"var(--sf2)"; }
@@ -4737,7 +4793,8 @@ function buildPerson(p, idx, showCls){
   html += " data-allslots='"+allSlotsStr+"'";
   html += " data-fallback='"+p.fallback+"'";
   html += " data-home='"+p.home+"'";
-  html += " data-cls='"+p.cls_label+"'>";
+  html += " data-cls='"+p.cls_label+"'";
+  html += " data-curcls='"+(p.cur_cls||'')+"'>";
 
   // Rank circle
   html += "<div class='rv-rank-badge' style='background:"+rankBg(idx)+"'>"+( idx+1)+"</div>";
@@ -4747,12 +4804,16 @@ function buildPerson(p, idx, showCls){
   html += "<span style='font-size:11px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>"+p.name+"</span>";
   // 志X chip (only show THIS slot's preference rank)
   html += "<span style='flex-shrink:0;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:"+chipBg(p.slot_rank)+";color:"+chipColor(p.slot_rank)+"'>志"+p.slot_rank+"</span>";
-  // Cross-hall badge
+  // Cross-hall badge（該生本來報名的館別跟這個候補班次的館別不同，才顯示）
   if(crossHall){
     html += "<span style='flex-shrink:0;font-size:9px;background:var(--pu-bg);color:var(--pu);padding:0 3px;border-radius:3px'>"+p.home+"</span>";
   }
-  // In search mode, show class label
-  if(showCls){
+  // In search mode / 劃位試排候補中：顯示班別。compact 模式（候補中欄位用，
+  // 欄寬較窄）只顯示英文代號（例如"C"），不重複顯示館別（該欄位本身就已經
+  // 是單一館別）
+  if(compact){
+    html += "<span style='flex-shrink:0;font-size:9px;background:var(--am-bg);color:var(--am);padding:0 3px;border-radius:3px'>"+p.cls_label.slice(-1)+"</span>";
+  } else if(showCls){
     html += "<span style='flex-shrink:0;font-size:9px;background:var(--am-bg);color:var(--am);padding:0 3px;border-radius:3px'>"+p.hall_label+p.cls_label+"</span>";
   }
   html += "</div></div>";
@@ -4770,6 +4831,7 @@ function attachGridTooltips(){
       th += "<div style='font-size:11px;color:var(--tx3);margin-bottom:7px'>"+el.dataset.home+"館";
       if(el.dataset.cls) th += " · "+el.dataset.cls;
       th += " · 本格 <span style='color:"+pc(sr)+";font-weight:700'>志"+sr+"</span></div>";
+      if(el.dataset.curcls) th += "<div style='font-size:11px;color:var(--tx3);margin-bottom:7px'>原班："+el.dataset.curcls+"</div>";
       th += "<div style='font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:3px'>所有志願時段</div>";
       (el.dataset.allslots||"").split("|").forEach(function(s){
         if(!s) return;
@@ -4828,7 +4890,8 @@ function RVgrid(){
           slots_all: item.slots,
           fallback:  item.fallback,
           cls_label: clsLabel,
-          hall_label: k.slice(0,2)
+          hall_label: k.slice(0,2),
+          cur_cls: item.cur_cls
         });
       });
     });
