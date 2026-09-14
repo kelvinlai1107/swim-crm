@@ -675,7 +675,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
       <select class="fs" id="rv-plan" onchange="RVstuRender()"><option value="">所有方案</option><option value="change">換班續報</option><option value="same">原班續報</option><option value="rest">不續報</option></select>
       <select class="fs" id="rv-hall2" onchange="RVstuRender()"><option value="">兩館</option><option value="西屯">西屯館</option><option value="北屯">北屯館</option></select>
     </div>
-    <div class="tw"><table><thead><tr><th>#</th><th>學員</th><th>館別</th><th>目前班別</th><th>方案</th><th>候補班別與時段志願</th><th>後備方案</th><th>填單時間</th></tr></thead><tbody id="rv-stu-body"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>#</th><th>學員</th><th>館別</th><th>目前班別</th><th>方案</th><th>候補班別與時段志願</th><th>後備方案</th><th>填單時間</th><th>操作</th></tr></thead><tbody id="rv-stu-body"></tbody></table></div>
   </div>
   <div id="rv-heat" style="display:none">
     <div id="rv-heat-body"></div>
@@ -3699,11 +3699,14 @@ function _rvBuildFormalRoster(){
   return out;
 }
 
-// 問卷欄位C(目前班別)的文字整理過後（例如"幼兒C"），跟 _TRIAL_LETTER_LABEL
-// 的規則一致，班別代號固定是最後一個字
-function _rvClassLetter(cur_cls){
-  var s=(cur_cls||'').trim();
-  return s ? s.slice(-1) : '';
+// 問卷欄位C(目前班別)的文字有時不只一個乾淨的班別代號，可能像"幼兒C/D"
+// 這種合併寫法（家長不確定小朋友被分到C還是D班），所以這裡把字串裡出現
+// 過的所有 A-F 代號都抓出來，比對時只要對到其中一個就算數，不要求剛好是
+// 最後一個字
+function _rvClassLetters(cur_cls){
+  var s=(cur_cls||'').toUpperCase();
+  var m=s.match(/[A-F]/g);
+  return m || [];
 }
 
 function _rvStuMatchKey(){ return 'crm_rv_stumatch_'+_curSeason; }
@@ -3735,22 +3738,36 @@ function _rvMatchRoster(){
       claimed[ov]=true;
       return;
     }
-    var letter=_rvClassLetter(entry.cur_cls);
-    var strict=roster.filter(function(r){
-      return r.name===name && r.hallZh===entry.hall && (!letter || r.letter===letter) && !claimed[r.key];
+    var letters=_rvClassLetters(entry.cur_cls);
+    var byNameHallCls=roster.filter(function(r){
+      return r.name===name && r.hallZh===entry.hall && (!letters.length || letters.indexOf(r.letter)>=0) && !claimed[r.key];
     });
-    if(strict.length===1){
-      matchedByName[name]=strict[0];
-      claimed[strict[0].key]=true;
-    } else if(strict.length>1){
-      unresolved.push({name:name, entry:entry, candidates:strict});
-    } else {
-      // 姓名對不到（家長可能填小名/英文名/打錯字），放寬成同館別的正式生
-      // 名單都列出來讓使用者手動挑選（未被別筆搶走的座位）
-      var loose=roster.filter(function(r){ return r.hallZh===entry.hall && !claimed[r.key]; });
-      loose.sort(function(a,b){ return a.name<b.name?-1:1; });
-      unresolved.push({name:name, entry:entry, candidates:loose});
+    if(byNameHallCls.length===1){
+      matchedByName[name]=byNameHallCls[0];
+      claimed[byNameHallCls[0].key]=true;
+      return;
     }
+    if(byNameHallCls.length>1){
+      unresolved.push({name:name, entry:entry, candidates:byNameHallCls});
+      return;
+    }
+    // 姓名＋館別＋班別代號對不到——班別文字有時候是"C/D"這種寫法、或問卷
+    // 打錯字，放寬成只看姓名＋館別，姓名夠獨特的話通常這樣就能對到了
+    var byNameHall=roster.filter(function(r){ return r.name===name && r.hallZh===entry.hall && !claimed[r.key]; });
+    if(byNameHall.length===1){
+      matchedByName[name]=byNameHall[0];
+      claimed[byNameHall[0].key]=true;
+      return;
+    }
+    if(byNameHall.length>1){
+      unresolved.push({name:name, entry:entry, candidates:byNameHall});
+      return;
+    }
+    // 連姓名都對不到（家長可能填小名/英文名/打錯字），放寬成同館別的正式
+    // 生名單都列出來讓使用者手動挑選（未被別筆搶走的座位）
+    var loose=roster.filter(function(r){ return r.hallZh===entry.hall && !claimed[r.key]; });
+    loose.sort(function(a,b){ return a.name<b.name?-1:1; });
+    unresolved.push({name:name, entry:entry, candidates:loose});
   });
 
   return {roster:roster, matchedByName:matchedByName, unresolved:unresolved};
@@ -3858,6 +3875,11 @@ function RVgetRawEntry(name, submit){
   return null;
 }
 
+// RV_RAW／RV_CHOICES 只要一改動就馬上存回 localStorage，避免使用者選好、
+// 刪好之後沒按「套用所有選擇」就重新整理，結果全部打回原形、又要重來一次
+function _rvSaveRaw(){ try{ localStorage.setItem('crm_rv_raw_'+_curSeason, JSON.stringify(RV_RAW)); }catch(e){} }
+function _rvSaveChoices(){ try{ localStorage.setItem('crm_rv_choices_'+_curSeason, JSON.stringify(RV_CHOICES)); }catch(e){} }
+
 function RVdupsDeleteEntry(name, submit){
   var idx=-1;
   for(var i=0;i<RV_RAW.length;i++){
@@ -3865,11 +3887,13 @@ function RVdupsDeleteEntry(name, submit){
   }
   if(idx===-1) return;
   RV_RAW.splice(idx,1);
+  _rvSaveRaw();
   RVrebuildDups();
   if(RV_CHOICES[name]!=null && RV_CHOICES[name]!==-1){
     var dup=RV_DUPS.find(function(d){ return d.name===name; });
     if(!dup || RV_CHOICES[name]>=dup.entries.length) delete RV_CHOICES[name];
   }
+  _rvSaveChoices();
   RVbuildWL();
   RVrenderDups();
 }
@@ -3879,22 +3903,27 @@ function RVdupsConfirmDelete(name, submit){
   RVdupsDeleteEntry(name, submit);
 }
 
-function RVdupsSelect(name,idx){ RV_CHOICES[name]=idx; RVrenderDups(); }
+function RVdupsSelect(name,idx){ RV_CHOICES[name]=idx; _rvSaveChoices(); RVrenderDups(); }
 
-function RVdupsExclude(name){ RV_CHOICES[name]=-1; RVrenderDups(); }
+function RVdupsExclude(name){ RV_CHOICES[name]=-1; _rvSaveChoices(); RVrenderDups(); }
 
-function RVdupsReset(name){ delete RV_CHOICES[name]; RVrenderDups(); }
+function RVdupsReset(name){ delete RV_CHOICES[name]; _rvSaveChoices(); RVrenderDups(); }
 
 function RVdupsApplyAll(){
-  try{localStorage.setItem('crm_rv_choices_'+_curSeason,JSON.stringify(RV_CHOICES));}catch(ex){}
+  _rvSaveChoices();
   RVbuildWL(); RVrender(); RVstuRender();
   var s=document.getElementById("rv-dups-status");
   if(s) s.textContent += " ✓ 已套用至所有分析";
 }
 
-function RVdupsResetAll(){ RV_CHOICES={}; RVrenderDups(); }
+function RVdupsResetAll(){ RV_CHOICES={}; _rvSaveChoices(); RVrenderDups(); }
 
 function RVrenderDups(){
+  // 這個畫面要整個重畫了，先把可能還停留在畫面上的候補提示卡收起來──不然
+  // 滑鼠原本停在某一列上，那一列被換掉後 mouseleave 不會被觸發，提示卡就
+  // 會卡在畫面上不會消失
+  var _dupTip=document.getElementById('dup-tip');
+  if(_dupTip) _dupTip.style.display='none';
   // Only show duplicates where at least one entry has plan=change
   // (same-only duplicates don't need manual resolution)
   var allDups=RV_DUPS;
@@ -4009,6 +4038,8 @@ function RVtrialRender(){
   var hall = (document.getElementById('rv-trial-hall')||{}).value || 'X';
   var body = document.getElementById('rv-trial-body');
   if(!body) return;
+  // 畫面要整個重畫，先收起候補提示卡，避免卡住不消失（同 RVrenderDups 的作法）
+  ['rv-trial-tip','rv-trial-fn-tip'].forEach(function(id){ var t=document.getElementById(id); if(t) t.style.display='none'; });
 
   // Use NEXT season's slots (current season in _curSeason)
   // The trial uses current season's SLOTS as the new layout
@@ -4863,10 +4894,146 @@ function RVstuRender(){
     html+="<td style=\'line-height:1.8\'>"+volH+"</td>";
     html+="<td>"+fbTag(e.fallback)+"</td>";
     html+="<td style=\'font-size:11px;font-family:monospace;color:var(--tx3)\'>"+(e.submit?e.submit.slice(5,16):"--")+"</td>";
+    html+="<td><button class=\'btn bs sm\' onclick=\"RVstuEditOpen('"+e.name.replace(/'/g,"\\'")+"','"+e.submit+"')\">編輯</button></td>";
     html+="</tr>";
   });
-  document.getElementById("rv-stu-body").innerHTML=html||"<tr><td colspan=\'8\' style=\'text-align:center;padding:20px;color:var(--tx3)\'>無符合條件的資料</td></tr>";
+  document.getElementById("rv-stu-body").innerHTML=html||"<tr><td colspan=\'9\' style=\'text-align:center;padding:20px;color:var(--tx3)\'>無符合條件的資料</td></tr>";
   RVstuMatchRender();
+}
+
+// ── 編輯填表資料：原班續報/換班續報/不續報 有可能事後又要改變主意，這裡讓
+// 使用者直接在「學員志願總覽」修改狀態及候補志願時段，不用回去改原始 Excel ──
+var RV_EDIT_HALL_OPTS=['西屯','北屯'];
+var RV_EDIT_CLASS_OPTS=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
+var RV_EDIT_DAY_OPTS=['二','三','四','五','六'];
+
+function RVstuEditOpen(name, submit){
+  var e=RVgetRawEntry(name, submit);
+  if(!e){ alert('找不到這筆填表資料，可能已被刪除，請重新整理後再試'); return; }
+  window._rvEditEntry=e;
+  // 把 wls:[{hall,class,slots:[{rank,slot}]}] 攤平成一列一個志願，方便編輯，
+  // 儲存時再組回原本的結構
+  window._rvEditRows=[];
+  (e.wls||[]).forEach(function(wl){
+    (wl.slots||[]).forEach(function(s){
+      var m=/^週([二三四五六])\s*(.*)$/.exec(s.slot||'');
+      window._rvEditRows.push({hall:wl.hall, cls:wl.class, day:m?m[1]:'二', time:m?m[2]:'', rank:s.rank||1});
+    });
+  });
+  var modal=document.getElementById('rv-edit-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='rv-edit-modal';
+    modal.className='mgmt-ov';
+    document.body.appendChild(modal);
+  }
+  modal.classList.add('open');
+  RVstuEditRender();
+}
+
+function RVstuEditRender(){
+  var modal=document.getElementById('rv-edit-modal');
+  var e=window._rvEditEntry;
+  if(!modal || !e) return;
+  var rows=window._rvEditRows;
+  function planOpt(v,label){ return '<option value="'+v+'"'+(e.plan===v?' selected':'')+'>'+label+'</option>'; }
+  function fbOpt(v,label){ return '<option value="'+v+'"'+((e.fallback||'')===v?' selected':'')+'>'+label+'</option>'; }
+  var rowsHTML='';
+  if(e.plan==='change'){
+    rows.forEach(function(r,ri){
+      rowsHTML+='<div style="display:flex;align-items:center;gap:6px;padding:4px 0;flex-wrap:wrap">'+
+        '<span style="font-size:11px;color:var(--tx3);width:16px">'+(ri+1)+'.</span>'+
+        '<select class="fs" style="width:70px" onchange="_rvEditRowSet('+ri+",'hall',this.value)\">"+
+          RV_EDIT_HALL_OPTS.map(function(h){return '<option value="'+h+'"'+(r.hall===h?' selected':'')+'>'+h+'</option>';}).join('')+
+        '</select>'+
+        '<select class="fs" style="width:90px" onchange="_rvEditRowSet('+ri+",'cls',this.value)\">"+
+          RV_EDIT_CLASS_OPTS.map(function(c){return '<option value="'+c+'"'+(r.cls===c?' selected':'')+'>'+c+'</option>';}).join('')+
+        '</select>'+
+        '<select class="fs" style="width:64px" onchange="_rvEditRowSet('+ri+",'day',this.value)\">"+
+          RV_EDIT_DAY_OPTS.map(function(d){return '<option value="'+d+'"'+(r.day===d?' selected':'')+'>週'+d+'</option>';}).join('')+
+        '</select>'+
+        '<input class="fi2" style="width:76px" placeholder="HH:MM" value="'+(r.time||'')+'" onchange="_rvEditRowSet('+ri+",'time',this.value)\">"+
+        '<span style="font-size:11px;color:var(--tx3)">志願序</span>'+
+        '<input class="fi2" type="number" min="1" style="width:52px" value="'+(r.rank||1)+'" onchange="_rvEditRowSet('+ri+",'rank',this.value)\">"+
+        '<button class="btn bs sm" onclick="_rvEditRemoveRow('+ri+')">刪除</button>'+
+      '</div>';
+    });
+    rowsHTML+='<button class="btn bs sm" style="margin-top:6px" onclick="_rvEditAddRow()">＋ 新增候補志願</button>';
+  }
+  modal.innerHTML='<div class="mgmt-pn" style="width:580px">'+
+    '<div class="mgmt-hd"><span style="font-size:15px;font-weight:700">編輯填表資料：'+e.name+'</span>'+
+    '<button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById(\'rv-edit-modal\').classList.remove(\'open\')">×</button></div>'+
+    '<div class="mgmt-bd">'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+      '<span style="font-size:12px;color:var(--tx3);width:60px;flex-shrink:0">狀態</span>'+
+      '<select class="fs" id="rv-edit-plan" onchange="_rvEditSetPlan(this.value)">'+
+        planOpt('same','原班續報')+planOpt('change','換班續報')+planOpt('rest','不續報')+
+      '</select>'+
+    '</div>'+
+    '<div id="rv-edit-rows">'+(e.plan==='change'?rowsHTML:'')+'</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-top:10px">'+
+      '<span style="font-size:12px;color:var(--tx3);width:60px;flex-shrink:0">後備方案</span>'+
+      '<select class="fs" id="rv-edit-fb">'+
+        fbOpt('','--')+fbOpt('請老師幫忙','請老師幫忙')+fbOpt('回到原時段','回到原時段')+fbOpt('無法續報','無法續報')+
+      '</select>'+
+    '</div>'+
+    '</div><div class="mgmt-ft"><button class="btn bs sm" onclick="document.getElementById(\'rv-edit-modal\').classList.remove(\'open\')">取消</button>'+
+    '<button class="btn bp sm" onclick="RVstuEditSave()">儲存</button>'+
+    '</div></div>';
+}
+
+function _rvEditSetPlan(v){
+  window._rvEditEntry.plan=v;
+  if(v==='change' && !window._rvEditRows.length){
+    window._rvEditRows.push({hall:window._rvEditEntry.hall||'西屯', cls:RV_EDIT_CLASS_OPTS[0], day:'二', time:'', rank:1});
+  }
+  RVstuEditRender();
+}
+
+function _rvEditRowSet(ri,field,val){
+  var r=window._rvEditRows[ri];
+  if(!r) return;
+  r[field]= (field==='rank') ? (parseInt(val,10)||1) : val;
+}
+
+function _rvEditAddRow(){
+  var rows=window._rvEditRows;
+  var last=rows[rows.length-1];
+  rows.push({hall:last?last.hall:(window._rvEditEntry.hall||'西屯'), cls:RV_EDIT_CLASS_OPTS[0], day:'二', time:'', rank:rows.length+1});
+  RVstuEditRender();
+}
+
+function _rvEditRemoveRow(ri){
+  window._rvEditRows.splice(ri,1);
+  RVstuEditRender();
+}
+
+function RVstuEditSave(){
+  var e=window._rvEditEntry;
+  if(!e) return;
+  var fb=document.getElementById('rv-edit-fb');
+  e.fallback = fb ? fb.value : e.fallback;
+  if(e.plan==='change'){
+    // 把攤平的列表依 館別+班別 分組，組回原本 wls:[{hall,class,slots:[{rank,slot}]}] 的結構
+    var groups={}, order=[];
+    window._rvEditRows.forEach(function(r){
+      if(!r.time) return; // 時段留空的列忽略，不算入志願
+      var key=r.hall+'|'+r.cls;
+      if(!groups[key]){ groups[key]={hall:r.hall, class:r.cls, slots:[]}; order.push(key); }
+      groups[key].slots.push({rank:r.rank||1, slot:'週'+r.day+' '+r.time});
+    });
+    e.wls = order.map(function(k){ return groups[k]; });
+  } else {
+    e.wls = [];
+  }
+  _rvSaveRaw();
+  RVrebuildDups();
+  RVbuildWL();
+  var modal=document.getElementById('rv-edit-modal');
+  if(modal) modal.classList.remove('open');
+  RVstuRender();
+  if(typeof RVrender==='function') RVrender();
+  if(typeof RVrenderDups==='function') RVrenderDups();
 }
 
 // ── 填表狀況分析（比對上一季正式生名單）─────────────────────────────────
@@ -4903,6 +5070,10 @@ function RVstuMatchRender(){
   panel.innerHTML=html;
 }
 
+// 「查無此人」用一個固定的特殊選項文字表示，跟正式生名單裡的候選人共用
+// 同一個搜尋輸入框——選這個文字就等於標記這筆是查無對應，不再提示
+var RV_MATCH_NONE_LABEL = '－ 查無此人（非上一季正式生）－';
+
 function RVstuMatchOpen(){
   var stats=_rvStuStats();
   var unresolved=stats.match.unresolved;
@@ -4914,58 +5085,69 @@ function RVstuMatchOpen(){
     document.body.appendChild(modal);
   }
   var rowsHTML='';
+  var labelMap={};
   if(!unresolved.length){
     rowsHTML='<div style="text-align:center;color:var(--tx3);padding:24px">目前沒有待確認的填表資料</div>';
   } else {
     unresolved.forEach(function(u,ui){
-      var opts='<option value="">－ 選擇正式生名單中的學員 －</option>';
+      var map={};
+      map[RV_MATCH_NONE_LABEL]='NONE';
+      var dlOpts='<option value="'+RV_MATCH_NONE_LABEL+'">';
       u.candidates.forEach(function(c){
-        opts+='<option value="'+c.key.replace(/"/g,'&quot;')+'">'+c.name+'（'+c.hallZh+' '+c.letter+' 週'+c.day+' '+c.time+' '+c.teacher+'）</option>';
+        var label=c.name+'（'+c.hallZh+' '+c.letter+' 週'+c.day+' '+c.time+' '+c.teacher+'）';
+        map[label]=c.key;
+        dlOpts+='<option value="'+label.replace(/"/g,'&quot;')+'">';
       });
+      labelMap[ui]=map;
       rowsHTML+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap">'+
         '<div style="flex:0 0 90px;font-weight:600;font-size:13px">'+u.name+'</div>'+
         '<span class="tag '+(u.entry.hall==='西屯'?'t-bl':'t-pu')+'" style="font-size:11px;flex-shrink:0">'+u.entry.hall+'</span>'+
-        '<div style="flex:0 0 70px;font-size:12px;color:var(--tx2)">原班：'+(u.entry.cur_cls||'--')+'</div>'+
-        '<select class="fse" style="flex:1;min-width:180px" id="rv-match-sel-'+ui+'">'+opts+'</select>'+
-        '<button class="btn bp sm" onclick="RVstuMatchConfirm('+ui+')">確認</button>'+
-        '<button class="btn bg sm" onclick="RVstuMatchSkip(\''+u.name.replace(/'/g,"\\'")+'\')">查無此人</button>'+
+        '<div style="flex:0 0 90px;font-size:12px;color:var(--tx2)">原班：'+(u.entry.cur_cls||'--')+'</div>'+
+        '<input type="text" class="fi2" style="flex:1;min-width:220px" autocomplete="off" placeholder="輸入姓名搜尋正式生名單，或選查無此人" list="rv-match-dl-'+ui+'" id="rv-match-inp-'+ui+'">'+
+        '<datalist id="rv-match-dl-'+ui+'">'+dlOpts+'</datalist>'+
       '</div>';
     });
   }
-  modal.innerHTML='<div class="mgmt-pn" style="width:660px">'+
+  modal.innerHTML='<div class="mgmt-pn" style="width:680px">'+
     '<div class="mgmt-hd"><span style="font-size:15px;font-weight:700">待確認填表對應</span>'+
     '<button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:20px" onclick="document.getElementById(\'rv-match-modal\').classList.remove(\'open\')">×</button></div>'+
     '<div class="mgmt-bd" style="max-height:460px;overflow-y:auto">'+
-    '<div style="font-size:12px;color:var(--tx3);margin-bottom:8px">選擇這筆填表資料實際對應到上一季正式生名單裡的哪一位學員；若確定不是上一季的正式生（例如新生、體驗生），點「查無此人」略過即可，之後不會再提示。</div>'+
+    '<div style="font-size:12px;color:var(--tx3);margin-bottom:8px">在輸入框輸入姓名搜尋、從清單中選擇這筆填表資料實際對應到上一季正式生名單裡的哪一位學員；若確定不是上一季的正式生（例如新生、體驗生），選「查無此人」即可，之後不會再提示。可以先選好多筆，最後一次按下方「確認送出」。沒選的會維持待確認。</div>'+
     rowsHTML+
-    '</div><div class="mgmt-ft"><button class="btn bs sm" onclick="document.getElementById(\'rv-match-modal\').classList.remove(\'open\')">關閉</button></div></div>';
+    '</div><div class="mgmt-ft"><button class="btn bs sm" onclick="document.getElementById(\'rv-match-modal\').classList.remove(\'open\')">關閉</button>'+
+    (unresolved.length?'<button class="btn bp sm" onclick="RVstuMatchSubmitAll()">確認送出</button>':'')+
+    '</div></div>';
   modal.classList.add('open');
   window._rvMatchUnresolved = unresolved;
+  window._rvMatchLabelMap = labelMap;
 }
 
-function RVstuMatchConfirm(ui){
-  var u=window._rvMatchUnresolved[ui];
-  if(!u) return;
-  var sel=document.getElementById('rv-match-sel-'+ui);
-  var key=sel.value;
-  if(!key){ alert('請先選擇對應的學員'); return; }
+function RVstuMatchSubmitAll(){
+  var unresolved=window._rvMatchUnresolved||[];
+  var labelMap=window._rvMatchLabelMap||{};
   var overrides=_rvGetStuMatch();
-  overrides[u.name]=key;
+  var applied=0, unrecognized=0;
+  unresolved.forEach(function(u,ui){
+    var inp=document.getElementById('rv-match-inp-'+ui);
+    if(!inp) return;
+    var val=(inp.value||'').trim();
+    if(!val) return; // 這筆先跳過，維持待確認
+    var map=labelMap[ui]||{};
+    var key=map[val];
+    if(key===undefined){ unrecognized++; return; } // 打了字但沒有真的從清單選到，不套用
+    overrides[u.name]=key;
+    applied++;
+  });
+  if(!applied){
+    alert(unrecognized?'有輸入文字但沒有從清單中選到項目，請直接點選清單裡的選項':'請先為至少一筆選擇對應學員或查無此人');
+    return;
+  }
   _rvSetStuMatch(overrides);
-  RVbuildWL(); // 原班時段(cur_slot)也要跟著這筆新的對應重新算
+  RVbuildWL(); // 原班時段(cur_slot)也要跟著新的對應重新算
   RVstuMatchOpen();
   RVstuMatchRender();
   RVstuRender();
-}
-
-function RVstuMatchSkip(name){
-  var overrides=_rvGetStuMatch();
-  overrides[name]='NONE';
-  _rvSetStuMatch(overrides);
-  RVbuildWL();
-  RVstuMatchOpen();
-  RVstuMatchRender();
-  RVstuRender();
+  if(unrecognized) alert('已套用 '+applied+' 筆，其中 '+unrecognized+' 筆輸入的文字沒有對到清單選項，維持待確認');
 }
 
 function RVheat(){
@@ -5091,6 +5273,7 @@ function attachGridTooltips(){
 }
 
 function RVgrid(){
+  var _gridTip=document.getElementById('rv-grid-tip'); if(_gridTip) _gridTip.style.display='none';
   var hall    = document.getElementById("rv-grid-hall").value;
   var cls     = document.getElementById("rv-grid-cls").value;
   var search  = (document.getElementById("rv-grid-search").value||"").trim();
