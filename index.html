@@ -5871,7 +5871,10 @@ function dashResolveSiteAndDrive(token){
     })
     .then(function(dl){
       var lib = (dl.value||[]).filter(function(d){ return d.name===DASH_LIBRARY; })[0];
-      if(!lib) throw new Error("找不到文件庫「"+DASH_LIBRARY+"」");
+      if(!lib){
+        var names = (dl.value||[]).map(function(d){ return d.name; }).join("、");
+        throw new Error("找不到文件庫「"+DASH_LIBRARY+"」，這個網站實際的文件庫有："+names);
+      }
       _dashDriveId = lib.id;
     });
 }
