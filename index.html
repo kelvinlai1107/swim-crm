@@ -5855,7 +5855,7 @@ function dashGraphFetch(url, token){
   return fetch(url, { headers:{ Authorization:"Bearer "+token } }).then(function(resp){
     if(!resp.ok){
       return resp.text().then(function(t){
-        throw new Error("Graph API " + resp.status + ": " + (t||"").slice(0,300));
+        throw new Error("Graph API " + resp.status + " [" + url + "]: " + (t||"").slice(0,300));
       });
     }
     return resp.json();
