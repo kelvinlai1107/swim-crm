@@ -5883,8 +5883,8 @@ function dashStrip(s){ return String(s||"").replace(/[\[\]\s]/g,""); }
 
 function dashListChildren(token, folderId){
   var url = folderId
-    ? "https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/items/"+folderId+"/children?$select=id,name,lastModifiedDateTime&$top=200"
-    : "https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/root/children?$select=id,name,lastModifiedDateTime&$top=200";
+    ? "https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/items/"+folderId+"/children?$select=id,name,lastModifiedDateTime,webUrl&$top=200"
+    : "https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/root/children?$select=id,name,lastModifiedDateTime,webUrl&$top=200";
   return dashGraphFetch(url, token).then(function(d){ return d.value||[]; });
 }
 
@@ -5966,7 +5966,7 @@ function dashExtractTable(values, mustContainHeader, rowLabelHeader){
   for(var r=0;r<values.length;r++){
     if(values[r].some(function(c){ return String(c).trim()===mustContainHeader; })){ headerRow=r; break; }
   }
-  if(headerRow<0) return [];
+  if(headerRow<0) return { headers:[], rows:[] };
   var headers = values[headerRow].map(function(h){ return String(h).trim(); });
   var labelCol = headers.indexOf(rowLabelHeader);
   var rows=[];
@@ -5978,7 +5978,8 @@ function dashExtractTable(values, mustContainHeader, rowLabelHeader){
     headers.forEach(function(h,idx){ if(h) obj[h]=row[idx]; });
     rows.push(obj);
   }
-  return rows;
+  var colHeaders = headers.filter(function(h,idx){ return h && idx!==labelCol; });
+  return { headers:colHeaders, rows:rows };
 }
 
 function dashToPct(v){
@@ -6027,14 +6028,13 @@ function dashLoadCapacity(token){
         return dashFindLatestFileInFolder(token, folderId, src.prefix);
       }).then(function(file){
         return dashReadRange(token, file.id, src.sheet, src.range).then(function(values){
-          var rows = dashExtractTable(values, "班別", "班別")
+          var table = dashExtractTable(values, "班別", "班別");
+          var rows = table.rows
             .filter(function(r){ return r._label && r._label!=="班別"; })
             .map(function(r){ return { category:r._label, quota:r["名額"], enrolled:r["正式生"], rate:dashToPct(r["滿班率"]) }; });
-          var rec = { branch:src.branch, fileName:file.name, rows:rows };
+          var rec = { branch:src.branch, fileName:file.name, fileUrl:file.webUrl, rows:rows };
           results.push(rec);
-          tablesEl.appendChild(dashRenderTable(rec.branch, "正式生/名額", rows.map(function(x){
-            return { label:x.category, left:(x.enrolled==null?"-":x.enrolled)+" / "+(x.quota==null?"-":x.quota), rate:x.rate };
-          }), rec.fileName));
+          tablesEl.appendChild(dashRenderCapacityTable(rec));
         });
       });
     });
@@ -6055,13 +6055,15 @@ function dashLoadRenewal(token){
         return dashFindLatestFileInFolder(token, folderId, src.prefix);
       }).then(function(file){
         return dashReadRange(token, file.id, src.sheet, src.range).then(function(values){
-          var rows = dashExtractTable(values, "續報率", "夏季學員人數")
-            .map(function(r){ return { category:r._label, total:r["學期總人數"], renewed:r["續報人數"], notRenewed:r["未續報人數"], rate:dashToPct(r["續報率"]) }; });
-          var rec = { branch:src.branch, fileName:file.name, rows:rows };
+          var table = dashExtractTable(values, "續報率", "夏季學員人數");
+          var totalRow = table.rows.filter(function(r){ return r._label.indexOf("期末")>=0 || r._label.indexOf("總")>=0; })[0];
+          var rec = {
+            branch:src.branch, fileName:file.name, fileUrl:file.webUrl,
+            headers:table.headers, rows:table.rows,
+            totalRate: totalRow ? dashToPct(totalRow["續報率"]) : 0
+          };
           results.push(rec);
-          tablesEl.appendChild(dashRenderTable(rec.branch, "續報/總人數", rows.map(function(x){
-            return { label:x.category, left:(x.renewed==null?"-":x.renewed)+" / "+(x.total==null?"-":x.total), rate:x.rate };
-          }), rec.fileName));
+          tablesEl.appendChild(dashRenderRenewalTable(rec));
         });
       });
     });
@@ -6069,41 +6071,116 @@ function dashLoadRenewal(token){
   return chain.then(function(){ return results; });
 }
 
-function dashRenderTable(branch, colLabel, rows, fileName){
-  var wrap = document.createElement("div");
-  var body = rows.map(function(r){
-    return "<tr><td>"+r.label+"</td><td style='text-align:right'>"+r.left+"</td>"+
-      "<td style='text-align:right'><div style='display:flex;align-items:center;gap:8px;justify-content:flex-end'>"+
-      "<div style='background:var(--sf2);border-radius:4px;height:6px;width:60px;overflow:hidden'>"+
-      "<div style='height:100%;border-radius:4px;width:"+Math.min(r.rate,100)+"%;background:"+dashBarColor(r.rate)+"'></div></div>"+
-      "<span>"+r.rate.toFixed(1)+"%</span></div></td></tr>";
+function dashSourceLine(rec){
+  return rec.fileUrl
+    ? "<a href='"+rec.fileUrl+"' target='_blank' rel='noopener' style='color:var(--bl)'>來源："+rec.fileName+"</a>"
+    : "來源："+rec.fileName;
+}
+
+function dashRateCell(rate){
+  return "<td style='text-align:right'><div style='display:flex;align-items:center;gap:8px;justify-content:flex-end'>"+
+    "<div style='background:var(--sf2);border-radius:4px;height:6px;width:60px;overflow:hidden'>"+
+    "<div style='height:100%;border-radius:4px;width:"+Math.min(rate,100)+"%;background:"+dashBarColor(rate)+"'></div></div>"+
+    "<span>"+rate.toFixed(2)+"%</span></div></td>";
+}
+
+// 滿班率統計表的視覺分組：對應原始表單裡的紅框區塊
+var DASH_CAPACITY_GROUPS = [
+  ["N","A","B","親子"],
+  ["C","D","幼兒"],
+  ["E","F","兒童"],
+  ["初階","進階","TOTAL"]
+];
+function dashGroupIndex(label){
+  for(var i=0;i<DASH_CAPACITY_GROUPS.length;i++){
+    if(DASH_CAPACITY_GROUPS[i].indexOf(label)>=0) return i;
+  }
+  return -1;
+}
+
+function dashRenderCapacityTable(rec){
+  var rows = rec.rows;
+  var body = rows.map(function(r, idx){
+    var g = dashGroupIndex(r.category);
+    var prevG = idx>0 ? dashGroupIndex(rows[idx-1].category) : null;
+    var nextG = idx<rows.length-1 ? dashGroupIndex(rows[idx+1].category) : null;
+    var bstyle = "";
+    if(g>=0){
+      bstyle = "border-left:2px solid var(--rd);border-right:2px solid var(--rd);"+
+        (g!==prevG ? "border-top:2px solid var(--rd);" : "")+
+        (g!==nextG ? "border-bottom:2px solid var(--rd);" : "");
+    }
+    var quota = r.quota==null || r.quota==="" ? null : Number(r.quota);
+    var enrolled = r.enrolled==null || r.enrolled==="" ? null : Number(r.enrolled);
+    var remain = (quota==null || enrolled==null) ? null : (quota - enrolled);
+    return "<tr>"+
+      "<td style='"+bstyle+"'>"+r.category+"</td>"+
+      "<td style='text-align:right;"+bstyle+"'>"+(enrolled==null?"-":enrolled)+" / "+(quota==null?"-":quota)+"</td>"+
+      "<td style='text-align:right;"+bstyle+"'>"+(remain==null?"-":remain)+"</td>"+
+      "<td style='"+bstyle+"'>"+dashRateCell(r.rate)+"</td>"+
+      "</tr>";
   }).join("");
+  var wrap = document.createElement("div");
   wrap.innerHTML =
-    "<div class='tw'><table><thead><tr><th>"+branch+"</th><th style='text-align:right'>"+colLabel+"</th><th style='text-align:right'>比率</th></tr></thead>"+
-    "<tbody>"+(body || "<tr><td colspan='3' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>來源："+fileName+"</div>";
+    "<div class='tw'><table><thead><tr><th>"+rec.branch+"</th><th style='text-align:right'>正式生/開班名額</th>"+
+    "<th style='text-align:right'>剩餘名額</th><th style='text-align:right'>滿班率</th></tr></thead>"+
+    "<tbody>"+(body || "<tr><td colspan='4' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>"+dashSourceLine(rec)+"</div>";
+  return wrap;
+}
+
+function dashRenderRenewalTable(rec){
+  var headers = rec.headers || [];
+  var headHtml = "<th>"+rec.branch+"</th>"+headers.map(function(h){
+    return "<th style='text-align:right'>"+h+"</th>";
+  }).join("");
+  var body = rec.rows.map(function(r){
+    var cells = headers.map(function(h){
+      var v = r[h];
+      if(h.indexOf("率")>=0){
+        return dashRateCell(dashToPct(v));
+      }
+      return "<td style='text-align:right'>"+(v==null||v===""?"-":v)+"</td>";
+    }).join("");
+    return "<tr><td>"+r._label+"</td>"+cells+"</tr>";
+  }).join("");
+  var wrap = document.createElement("div");
+  wrap.innerHTML =
+    "<div class='tw' style='overflow-x:auto'><table><thead><tr>"+headHtml+"</tr></thead>"+
+    "<tbody>"+(body || "<tr><td colspan='"+(headers.length+1)+"' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>"+dashSourceLine(rec)+"</div>";
   return wrap;
 }
 
 function dashRenderSummary(capacityResults, renewalResults){
-  function overallCapacity(rec){
-    var q=0,e=0;
-    rec.rows.forEach(function(r){ q+=Number(r.quota)||0; e+=Number(r.enrolled)||0; });
-    return q ? e/q*100 : 0;
+  function advancedCapacityRate(rec){
+    var row = (rec.rows||[]).filter(function(r){ return r.category==="初階"; })[0];
+    return row ? row.rate : 0;
   }
-  function overallRenewal(rec){
-    var total = rec.rows.filter(function(r){ return r.category.indexOf("期末")>=0 || r.category.indexOf("總")>=0; })[0];
-    return total ? total.rate : 0;
+  function avg(list){
+    return list.length ? list.reduce(function(a,b){ return a+b; },0)/list.length : 0;
   }
   var cards = [];
+  var capRates = [];
   capacityResults.forEach(function(rec){
-    var rate = overallCapacity(rec);
-    cards.push({ label:rec.branch+" 滿班率", value:rate.toFixed(1)+"%", cls:dashRateClass(rate) });
+    var rate = advancedCapacityRate(rec);
+    capRates.push(rate);
+    cards.push({ label:rec.branch+" 初階滿班率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
   });
+  if(capRates.length){
+    var capAvg = avg(capRates);
+    cards.push({ label:"平均 初階滿班率", value:capAvg.toFixed(2)+"%", cls:dashRateClass(capAvg) });
+  }
+  var renRates = [];
   renewalResults.forEach(function(rec){
-    var rate = overallRenewal(rec);
-    cards.push({ label:rec.branch+" 續報率", value:rate.toFixed(1)+"%", cls:dashRateClass(rate) });
+    var rate = rec.totalRate||0;
+    renRates.push(rate);
+    cards.push({ label:rec.branch+" 續報率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
   });
+  if(renRates.length){
+    var renAvg = avg(renRates);
+    cards.push({ label:"平均 續報率", value:renAvg.toFixed(2)+"%", cls:dashRateClass(renAvg) });
+  }
   document.getElementById("dash-summary").innerHTML = cards.map(function(c){
     return "<div class='sc "+c.cls+"'><div class='sl'>"+c.label+"</div><div class='sv'>"+c.value+"</div></div>";
   }).join("");
