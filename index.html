@@ -5843,7 +5843,8 @@ function dashInit(){
 }
 
 function dashGetToken(){
-  var account = _msalApp.getActiveAccount();
+  var accs = _msalApp.getAllAccounts();
+  var account = (accs && accs.length) ? accs[0] : null;
   if(!account) return Promise.reject(new Error("尚未登入"));
   return _msalApp.acquireTokenSilent({ scopes: DASH_SCOPES, account: account })
     .catch(function(){ return _msalApp.acquireTokenPopup({ scopes: DASH_SCOPES, account: account }); })
