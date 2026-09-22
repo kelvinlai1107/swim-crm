@@ -761,10 +761,11 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div id="pg-mkt" style="display:none"><div class="ph"><div class="pt">行銷分析</div></div><div class="sr"><div class="sc c-tl"><div class="sl">正式生續班率</div><div class="sv">87%</div></div><div class="sc c-pu"><div class="sl">NCC 轉換率</div><div class="sv">36%</div></div><div class="sc c-am"><div class="sl">套票→正式轉換</div><div class="sv">22%</div></div><div class="sc c-rd"><div class="sl">中斷生</div><div class="sv">31</div></div></div></div>
 <div id="pg-dashboard" style="display:none">
   <div class="ph"><div class="pt">營運儀表板</div><span id="dash-meta" style="font-size:12px;color:var(--tx3)"></span><button class="btn bs sm" onclick="dashLoad()" style="margin-left:auto">重新整理</button></div>
-  <div class="sr" id="dash-summary"></div>
+  <div class="sr" id="dash-summary-capacity"></div>
+  <div class="sr" id="dash-summary-renewal"></div>
   <details class="dash-sec">
     <summary class="dash-sec-h">滿班率分析</summary>
-    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="dash-capacity-tables"></div></div>
+    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr;gap:16px" id="dash-capacity-tables"></div></div>
   </details>
   <details class="dash-sec">
     <summary class="dash-sec-h">續報率分析</summary>
@@ -6013,7 +6014,8 @@ function dashRateTagClass(pctVal){
 
 function dashLoad(){
   document.getElementById("dash-err").textContent = "";
-  document.getElementById("dash-summary").innerHTML = "<div class='sc'><div class='sl'>讀取中…</div></div>";
+  document.getElementById("dash-summary-capacity").innerHTML = "<div class='sc'><div class='sl'>讀取中…</div></div>";
+  document.getElementById("dash-summary-renewal").innerHTML = "";
   var token;
   dashGetToken().then(function(t){
     token = t;
@@ -6023,7 +6025,8 @@ function dashLoad(){
     document.getElementById("dash-meta").textContent = "最後整理：" + new Date().toLocaleString("zh-TW");
   }).catch(function(e){
     document.getElementById("dash-err").textContent = "讀取失敗：" + (e && e.message ? e.message : e);
-    document.getElementById("dash-summary").innerHTML = "";
+    document.getElementById("dash-summary-capacity").innerHTML = "";
+    document.getElementById("dash-summary-renewal").innerHTML = "";
   });
 }
 
@@ -6117,13 +6120,10 @@ function dashRenderCapacityTable(rec){
   var rows = rec.rows;
   var body = rows.map(function(r, idx){
     var g = dashGroupIndex(r.category);
-    var prevG = idx>0 ? dashGroupIndex(rows[idx-1].category) : null;
     var nextG = idx<rows.length-1 ? dashGroupIndex(rows[idx+1].category) : null;
     var bstyle = dashCategoryTextStyle(r.category);
-    if(g>=0){
-      bstyle += "border-left:2px solid var(--rd);border-right:2px solid var(--rd);"+
-        (g!==prevG ? "border-top:2px solid var(--rd);" : "")+
-        (g!==nextG ? "border-bottom:2px solid var(--rd);" : "");
+    if(g>=0 && g!==nextG){
+      bstyle += "border-bottom:2px solid var(--bd2);";
     }
     var quota = r.quota==null || r.quota==="" ? null : Number(r.quota);
     var enrolled = r.enrolled==null || r.enrolled==="" ? null : Number(r.enrolled);
@@ -6167,6 +6167,10 @@ function dashRenderRenewalTable(rec){
   return wrap;
 }
 
+function dashCardHtml(c){
+  return "<div class='sc "+c.cls+"'><div class='sl' style='white-space:nowrap'>"+c.label+"</div><div class='sv' style='white-space:nowrap'>"+c.value+"</div></div>";
+}
+
 function dashRenderSummary(capacityResults, renewalResults){
   function advancedCapacityRate(rec){
     var row = (rec.rows||[]).filter(function(r){ return r.category==="初階"; })[0];
@@ -6175,30 +6179,30 @@ function dashRenderSummary(capacityResults, renewalResults){
   function avg(list){
     return list.length ? list.reduce(function(a,b){ return a+b; },0)/list.length : 0;
   }
-  var cards = [];
+  var capCards = [];
   var capRates = [];
   capacityResults.forEach(function(rec){
     var rate = advancedCapacityRate(rec);
     capRates.push(rate);
-    cards.push({ label:rec.branch+" 初階滿班率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
+    capCards.push({ label:rec.branch+" 初階滿班率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
   });
   if(capRates.length){
     var capAvg = avg(capRates);
-    cards.push({ label:"平均 初階滿班率", value:capAvg.toFixed(2)+"%", cls:dashRateClass(capAvg) });
+    capCards.push({ label:"平均 初階滿班率", value:capAvg.toFixed(2)+"%", cls:dashRateClass(capAvg) });
   }
+  var renCards = [];
   var renRates = [];
   renewalResults.forEach(function(rec){
     var rate = rec.totalRate||0;
     renRates.push(rate);
-    cards.push({ label:rec.branch+" 續報率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
+    renCards.push({ label:rec.branch+" 續報率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
   });
   if(renRates.length){
     var renAvg = avg(renRates);
-    cards.push({ label:"平均 續報率", value:renAvg.toFixed(2)+"%", cls:dashRateClass(renAvg) });
+    renCards.push({ label:"平均 續報率", value:renAvg.toFixed(2)+"%", cls:dashRateClass(renAvg) });
   }
-  document.getElementById("dash-summary").innerHTML = cards.map(function(c){
-    return "<div class='sc "+c.cls+"'><div class='sl' style='white-space:nowrap'>"+c.label+"</div><div class='sv' style='white-space:nowrap'>"+c.value+"</div></div>";
-  }).join("");
+  document.getElementById("dash-summary-capacity").innerHTML = capCards.map(dashCardHtml).join("");
+  document.getElementById("dash-summary-renewal").innerHTML = renCards.map(dashCardHtml).join("");
 }
 
 </script>
