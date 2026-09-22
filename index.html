@@ -5827,12 +5827,12 @@ var DASH_SITE_PATH = "/sites/administration";
 var DASH_LIBRARY   = "學員資訊";
 var DASH_SCOPES    = ["Sites.Read.All"];
 var DASH_CAPACITY_SOURCES = [
-  { branch:"西屯", folder:"西屯 A01", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40" },
-  { branch:"北屯", folder:"北屯 A02", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40" }
+  { branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40" },
+  { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40" }
 ];
 var DASH_RENEWAL_SOURCES = [
-  { branch:"西屯", folder:"02_西屯", prefix:"西屯未續報", sheet:"續報人數統計表", range:"A1:L10" },
-  { branch:"北屯", folder:"03_北屯", prefix:"北屯未續報", sheet:"續報人數統計表", range:"A1:L10" }
+  { branch:"西屯", prefix:"西屯未續報", sheet:"續報人數統計表", range:"A1:L10" },
+  { branch:"北屯", prefix:"北屯未續報", sheet:"續報人數統計表", range:"A1:L10" }
 ];
 var _dashLoaded=false, _dashSiteId=null, _dashDriveId=null;
 
@@ -5879,15 +5879,78 @@ function dashResolveSiteAndDrive(token){
     });
 }
 
-function dashFindLatestFile(token, folder, prefix){
-  return dashResolveSiteAndDrive(token).then(function(){
-    var path = encodeURIComponent(folder);
-    return dashGraphFetch("https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/root:/"+path+":/children?$select=id,name,lastModifiedDateTime&$top=200", token);
-  }).then(function(list){
-    var matches = (list.value||[])
+function dashStrip(s){ return String(s||"").replace(/[\[\]\s]/g,""); }
+
+function dashListChildren(token, folderId){
+  var url = folderId
+    ? "https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/items/"+folderId+"/children?$select=id,name,lastModifiedDateTime&$top=200"
+    : "https://graph.microsoft.com/v1.0/drives/"+_dashDriveId+"/root/children?$select=id,name,lastModifiedDateTime&$top=200";
+  return dashGraphFetch(url, token).then(function(d){ return d.value||[]; });
+}
+
+function dashFindFolderByName(items, name){
+  var target = dashStrip(name);
+  var hit = (items||[]).filter(function(f){ return dashStrip(f.name)===target; })[0];
+  if(!hit){
+    var names = (items||[]).map(function(f){ return f.name; }).join("、");
+    throw new Error("找不到資料夾「"+name+"」，這一層實際的項目有："+names);
+  }
+  return hit;
+}
+
+function dashFindFolderByInclude(items, sub){
+  var hit = (items||[]).filter(function(f){ return String(f.name||"").indexOf(sub)!==-1; })[0];
+  if(!hit){
+    var names = (items||[]).map(function(f){ return f.name; }).join("、");
+    throw new Error("找不到名稱包含「"+sub+"」的資料夾，這一層實際的項目有："+names);
+  }
+  return hit;
+}
+
+var DASH_SEASON_ORDER = {"春":0,"夏":1,"秋":2,"冬":3};
+function dashPickLatestSeasonFolder(items){
+  var parsed = (items||[]).map(function(f){
+    var m = /^(\d{4})(春|夏|秋|冬)季\s*$/.exec(String(f.name||"").trim());
+    return m ? { item:f, year:parseInt(m[1],10), rank:DASH_SEASON_ORDER[m[2]] } : null;
+  }).filter(Boolean);
+  if(!parsed.length){
+    var names = (items||[]).map(function(f){ return f.name; }).join("、");
+    throw new Error("找不到符合「YYYY春/夏/秋/冬季」格式的季度資料夾，這一層實際的項目有："+names);
+  }
+  parsed.sort(function(a,b){ return (b.year*10+b.rank) - (a.year*10+a.rank); });
+  return parsed[0].item;
+}
+
+function dashResolveCapacityFolder(token, branch){
+  return dashListChildren(token, null).then(function(rootItems){
+    var regFolder = dashFindFolderByName(rootItems, "註冊劃位表");
+    return dashListChildren(token, regFolder.id);
+  }).then(function(items){
+    return dashFindFolderByInclude(items, branch).id;
+  });
+}
+
+function dashResolveRenewalFolder(token, branch){
+  return dashListChildren(token, null).then(function(rootItems){
+    var baseFolder = dashFindFolderByName(rootItems, "續報作業");
+    return dashListChildren(token, baseFolder.id);
+  }).then(function(seasonItems){
+    var season = dashPickLatestSeasonFolder(seasonItems);
+    return dashListChildren(token, season.id);
+  }).then(function(items){
+    return dashFindFolderByInclude(items, branch).id;
+  });
+}
+
+function dashFindLatestFileInFolder(token, folderId, prefix){
+  return dashListChildren(token, folderId).then(function(list){
+    var matches = (list||[])
       .filter(function(f){ return f.name.indexOf(prefix)===0 && f.name.slice(-5)===".xlsx"; })
       .sort(function(a,b){ return new Date(b.lastModifiedDateTime) - new Date(a.lastModifiedDateTime); });
-    if(!matches.length) throw new Error("資料夾「"+folder+"」找不到檔名開頭「"+prefix+"」的 xlsx 檔");
+    if(!matches.length){
+      var names = (list||[]).map(function(f){ return f.name; }).join("、");
+      throw new Error("資料夾找不到檔名開頭「"+prefix+"」的 xlsx 檔，這個資料夾實際的檔案有："+names);
+    }
     return matches[0];
   });
 }
@@ -5958,7 +6021,11 @@ function dashLoadCapacity(token){
   var results = [];
   DASH_CAPACITY_SOURCES.forEach(function(src){
     chain = chain.then(function(){
-      return dashFindLatestFile(token, src.folder, src.prefix).then(function(file){
+      return dashResolveSiteAndDrive(token).then(function(){
+        return dashResolveCapacityFolder(token, src.branch);
+      }).then(function(folderId){
+        return dashFindLatestFileInFolder(token, folderId, src.prefix);
+      }).then(function(file){
         return dashReadRange(token, file.id, src.sheet, src.range).then(function(values){
           var rows = dashExtractTable(values, "班別", "班別")
             .filter(function(r){ return r._label && r._label!=="班別"; })
@@ -5982,7 +6049,11 @@ function dashLoadRenewal(token){
   var results = [];
   DASH_RENEWAL_SOURCES.forEach(function(src){
     chain = chain.then(function(){
-      return dashFindLatestFile(token, src.folder, src.prefix).then(function(file){
+      return dashResolveSiteAndDrive(token).then(function(){
+        return dashResolveRenewalFolder(token, src.branch);
+      }).then(function(folderId){
+        return dashFindLatestFileInFolder(token, folderId, src.prefix);
+      }).then(function(file){
         return dashReadRange(token, file.id, src.sheet, src.range).then(function(values){
           var rows = dashExtractTable(values, "續報率", "夏季學員人數")
             .map(function(r){ return { category:r._label, total:r["學期總人數"], renewed:r["續報人數"], notRenewed:r["未續報人數"], rate:dashToPct(r["續報率"]) }; });
