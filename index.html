@@ -5870,7 +5870,7 @@ function dashResolveSiteAndDrive(token){
       return dashGraphFetch("https://graph.microsoft.com/v1.0/sites/"+_dashSiteId+"/drives", token);
     })
     .then(function(dl){
-      var lib = (dl.value||[]).filter(function(d){ return d.name===DASH_LIBRARY; })[0];
+      var lib = (dl.value||[]).filter(function(d){ return String(d.name||"").replace(/[\[\]\s]/g,"")===DASH_LIBRARY; })[0];
       if(!lib){
         var names = (dl.value||[]).map(function(d){ return d.name; }).join("、");
         throw new Error("找不到文件庫「"+DASH_LIBRARY+"」，這個網站實際的文件庫有："+names);
