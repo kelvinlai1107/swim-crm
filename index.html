@@ -233,6 +233,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .dash-sec-body{padding:0 16px 16px}
 .dash-tbl th,.dash-tbl td{padding:8px 10px;font-size:12px}
 .dash-tbl th:not(:last-child),.dash-tbl td:not(:last-child){border-right:1px solid var(--bd)}
+#dash-capacity-tables>div,#dash-renewal-tables>div{min-width:0}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -6145,20 +6146,25 @@ function dashRenderCapacityTable(rec){
   return wrap;
 }
 
+function dashIsRenewalTotalRow(label){
+  return !!label && (label.indexOf("期末")>=0 || label.indexOf("總")>=0);
+}
+
 function dashRenderRenewalTable(rec){
   var headers = rec.headers || [];
   var headHtml = "<th>"+rec.branch+"</th>"+headers.map(function(h){
     return "<th style='text-align:right'>"+h+"</th>";
   }).join("");
   var body = rec.rows.map(function(r){
+    var bstyle = dashIsRenewalTotalRow(r._label) ? "color:var(--bl);font-weight:700;border-top:2px solid var(--bd2);" : "";
     var cells = headers.map(function(h){
       var v = r[h];
       if(h.indexOf("率")>=0){
-        return "<td style='text-align:right'>"+dashRateBadge(dashToPct(v))+"</td>";
+        return "<td style='text-align:right;"+bstyle+"'>"+dashRateBadge(dashToPct(v))+"</td>";
       }
-      return "<td style='text-align:right'>"+(v==null||v===""?"-":v)+"</td>";
+      return "<td style='text-align:right;"+bstyle+"'>"+(v==null||v===""?"-":v)+"</td>";
     }).join("");
-    return "<tr><td>"+r._label+"</td>"+cells+"</tr>";
+    return "<tr><td style='"+bstyle+"'>"+r._label+"</td>"+cells+"</tr>";
   }).join("");
   var wrap = document.createElement("div");
   wrap.innerHTML =
