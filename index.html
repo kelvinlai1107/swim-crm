@@ -232,6 +232,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .dash-sec-h:hover{background:var(--sf2)}
 .dash-sec-body{padding:0 16px 16px}
 .dash-tbl th,.dash-tbl td{padding:8px 10px;font-size:12px}
+.dash-tbl th:not(:last-child),.dash-tbl td:not(:last-child){border-right:1px solid var(--bd)}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -765,7 +766,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   <div class="sr" id="dash-summary-renewal"></div>
   <details class="dash-sec">
     <summary class="dash-sec-h">滿班率分析</summary>
-    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr;gap:16px" id="dash-capacity-tables"></div></div>
+    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="dash-capacity-tables"></div></div>
   </details>
   <details class="dash-sec">
     <summary class="dash-sec-h">續報率分析</summary>
