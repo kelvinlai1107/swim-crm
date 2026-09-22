@@ -224,6 +224,14 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .formal-slot-hd{margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;gap:3px}
 .formal-slot-row{display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px solid var(--bd);font-size:12px}
 .formal-slot-row:last-child{border-bottom:none}
+.dash-sec{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);margin-bottom:16px;overflow:hidden}
+.dash-sec-h{cursor:pointer;padding:12px 16px;font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;user-select:none}
+.dash-sec-h::-webkit-details-marker{display:none}
+.dash-sec-h::before{content:'▸';display:inline-block;width:14px;color:var(--tx3);font-size:11px}
+.dash-sec[open] .dash-sec-h::before{content:'▾'}
+.dash-sec-h:hover{background:var(--sf2)}
+.dash-sec-body{padding:0 16px 16px}
+.dash-tbl th,.dash-tbl td{padding:8px 10px;font-size:12px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -754,10 +762,14 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div id="pg-dashboard" style="display:none">
   <div class="ph"><div class="pt">營運儀表板</div><span id="dash-meta" style="font-size:12px;color:var(--tx3)"></span><button class="btn bs sm" onclick="dashLoad()" style="margin-left:auto">重新整理</button></div>
   <div class="sr" id="dash-summary"></div>
-  <div style="font-size:13px;font-weight:600;margin:4px 0 8px">滿班率（依「空額一覽」）</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" id="dash-capacity-tables"></div>
-  <div style="font-size:13px;font-weight:600;margin:4px 0 8px">續報率（依「續報人數統計表」）</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="dash-renewal-tables"></div>
+  <details class="dash-sec">
+    <summary class="dash-sec-h">滿班率分析</summary>
+    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="dash-capacity-tables"></div></div>
+  </details>
+  <details class="dash-sec">
+    <summary class="dash-sec-h">續報率分析</summary>
+    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr;gap:16px" id="dash-renewal-tables"></div></div>
+  </details>
   <div id="dash-err" style="color:var(--rd);font-size:13px;margin-top:12px;white-space:pre-wrap"></div>
 </div>
 </div></div>
@@ -5993,10 +6005,10 @@ function dashRateClass(pctVal){
   if(pctVal>=80) return "c-am";
   return "c-rd";
 }
-function dashBarColor(pctVal){
-  if(pctVal>=90) return "var(--tl)";
-  if(pctVal>=80) return "var(--am)";
-  return "var(--rd)";
+function dashRateTagClass(pctVal){
+  if(pctVal>=90) return "t-tl";
+  if(pctVal>=80) return "t-am";
+  return "t-rd";
 }
 
 function dashLoad(){
@@ -6077,11 +6089,8 @@ function dashSourceLine(rec){
     : "來源："+rec.fileName;
 }
 
-function dashRateCell(rate){
-  return "<td style='text-align:right'><div style='display:flex;align-items:center;gap:8px;justify-content:flex-end'>"+
-    "<div style='background:var(--sf2);border-radius:4px;height:6px;width:60px;overflow:hidden'>"+
-    "<div style='height:100%;border-radius:4px;width:"+Math.min(rate,100)+"%;background:"+dashBarColor(rate)+"'></div></div>"+
-    "<span>"+rate.toFixed(2)+"%</span></div></td>";
+function dashRateBadge(rate){
+  return "<span class='tag "+dashRateTagClass(rate)+"'>"+rate.toFixed(2)+"%</span>";
 }
 
 // 滿班率統計表的視覺分組：對應原始表單裡的紅框區塊
@@ -6098,15 +6107,21 @@ function dashGroupIndex(label){
   return -1;
 }
 
+function dashCategoryTextStyle(label){
+  if(label==="親子"||label==="幼兒"||label==="兒童") return "color:var(--rd);font-weight:700;";
+  if(label==="初階"||label==="進階"||label==="TOTAL") return "color:var(--bl);font-weight:700;";
+  return "";
+}
+
 function dashRenderCapacityTable(rec){
   var rows = rec.rows;
   var body = rows.map(function(r, idx){
     var g = dashGroupIndex(r.category);
     var prevG = idx>0 ? dashGroupIndex(rows[idx-1].category) : null;
     var nextG = idx<rows.length-1 ? dashGroupIndex(rows[idx+1].category) : null;
-    var bstyle = "";
+    var bstyle = dashCategoryTextStyle(r.category);
     if(g>=0){
-      bstyle = "border-left:2px solid var(--rd);border-right:2px solid var(--rd);"+
+      bstyle += "border-left:2px solid var(--rd);border-right:2px solid var(--rd);"+
         (g!==prevG ? "border-top:2px solid var(--rd);" : "")+
         (g!==nextG ? "border-bottom:2px solid var(--rd);" : "");
     }
@@ -6117,12 +6132,12 @@ function dashRenderCapacityTable(rec){
       "<td style='"+bstyle+"'>"+r.category+"</td>"+
       "<td style='text-align:right;"+bstyle+"'>"+(enrolled==null?"-":enrolled)+" / "+(quota==null?"-":quota)+"</td>"+
       "<td style='text-align:right;"+bstyle+"'>"+(remain==null?"-":remain)+"</td>"+
-      "<td style='"+bstyle+"'>"+dashRateCell(r.rate)+"</td>"+
+      "<td style='text-align:right;"+bstyle+"'>"+dashRateBadge(r.rate)+"</td>"+
       "</tr>";
   }).join("");
   var wrap = document.createElement("div");
   wrap.innerHTML =
-    "<div class='tw'><table><thead><tr><th>"+rec.branch+"</th><th style='text-align:right'>正式生/開班名額</th>"+
+    "<div class='tw dash-tbl'><table><thead><tr><th>"+rec.branch+"</th><th style='text-align:right'>正式生/開班名額</th>"+
     "<th style='text-align:right'>剩餘名額</th><th style='text-align:right'>滿班率</th></tr></thead>"+
     "<tbody>"+(body || "<tr><td colspan='4' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>"+dashSourceLine(rec)+"</div>";
@@ -6138,7 +6153,7 @@ function dashRenderRenewalTable(rec){
     var cells = headers.map(function(h){
       var v = r[h];
       if(h.indexOf("率")>=0){
-        return dashRateCell(dashToPct(v));
+        return "<td style='text-align:right'>"+dashRateBadge(dashToPct(v))+"</td>";
       }
       return "<td style='text-align:right'>"+(v==null||v===""?"-":v)+"</td>";
     }).join("");
@@ -6146,7 +6161,7 @@ function dashRenderRenewalTable(rec){
   }).join("");
   var wrap = document.createElement("div");
   wrap.innerHTML =
-    "<div class='tw' style='overflow-x:auto'><table><thead><tr>"+headHtml+"</tr></thead>"+
+    "<div class='tw dash-tbl' style='overflow-x:auto'><table><thead><tr>"+headHtml+"</tr></thead>"+
     "<tbody>"+(body || "<tr><td colspan='"+(headers.length+1)+"' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>"+dashSourceLine(rec)+"</div>";
   return wrap;
@@ -6182,7 +6197,7 @@ function dashRenderSummary(capacityResults, renewalResults){
     cards.push({ label:"平均 續報率", value:renAvg.toFixed(2)+"%", cls:dashRateClass(renAvg) });
   }
   document.getElementById("dash-summary").innerHTML = cards.map(function(c){
-    return "<div class='sc "+c.cls+"'><div class='sl'>"+c.label+"</div><div class='sv'>"+c.value+"</div></div>";
+    return "<div class='sc "+c.cls+"'><div class='sl' style='white-space:nowrap'>"+c.label+"</div><div class='sv' style='white-space:nowrap'>"+c.value+"</div></div>";
   }).join("");
 }
 
