@@ -233,7 +233,10 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .dash-sec-body{padding:0 16px 16px}
 .dash-tbl th,.dash-tbl td{padding:8px 10px;font-size:12px}
 .dash-tbl th:not(:last-child),.dash-tbl td:not(:last-child){border-right:1px solid var(--bd)}
-#dash-capacity-tables>div,#dash-renewal-tables>div{min-width:0}
+.dash-season-grid>div,#dash-renewal-tables>div{min-width:0}
+.dash-season-block{margin-bottom:20px}
+.dash-season-block:last-child{margin-bottom:0}
+.dash-season-h{font-size:12px;font-weight:600;color:var(--tx3);margin-bottom:8px;padding-left:2px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -763,11 +766,12 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 <div id="pg-mkt" style="display:none"><div class="ph"><div class="pt">行銷分析</div></div><div class="sr"><div class="sc c-tl"><div class="sl">正式生續班率</div><div class="sv">87%</div></div><div class="sc c-pu"><div class="sl">NCC 轉換率</div><div class="sv">36%</div></div><div class="sc c-am"><div class="sl">套票→正式轉換</div><div class="sv">22%</div></div><div class="sc c-rd"><div class="sl">中斷生</div><div class="sv">31</div></div></div></div>
 <div id="pg-dashboard" style="display:none">
   <div class="ph"><div class="pt">營運儀表板</div><span id="dash-meta" style="font-size:12px;color:var(--tx3)"></span><button class="btn bs sm" onclick="dashLoad()" style="margin-left:auto">重新整理</button></div>
-  <div class="sr" id="dash-summary-capacity"></div>
+  <div class="sr" id="dash-summary-capacity-current"></div>
+  <div class="sr" id="dash-summary-capacity-next"></div>
   <div class="sr" id="dash-summary-renewal"></div>
   <details class="dash-sec">
     <summary class="dash-sec-h">滿班率分析</summary>
-    <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="dash-capacity-tables"></div></div>
+    <div class="dash-sec-body" id="dash-capacity-tables"></div>
   </details>
   <details class="dash-sec">
     <summary class="dash-sec-h">續報率分析</summary>
@@ -6029,7 +6033,8 @@ function dashRateTagClass(pctVal){
 
 function dashLoad(){
   document.getElementById("dash-err").textContent = "";
-  document.getElementById("dash-summary-capacity").innerHTML = "<div class='sc'><div class='sl'>讀取中…</div></div>";
+  document.getElementById("dash-summary-capacity-current").innerHTML = "<div class='sc'><div class='sl'>讀取中…</div></div>";
+  document.getElementById("dash-summary-capacity-next").innerHTML = "";
   document.getElementById("dash-summary-renewal").innerHTML = "";
   var token;
   dashGetToken().then(function(t){
@@ -6040,7 +6045,8 @@ function dashLoad(){
     document.getElementById("dash-meta").textContent = "最後整理：" + new Date().toLocaleString("zh-TW");
   }).catch(function(e){
     document.getElementById("dash-err").textContent = "讀取失敗：" + (e && e.message ? e.message : e);
-    document.getElementById("dash-summary-capacity").innerHTML = "";
+    document.getElementById("dash-summary-capacity-current").innerHTML = "";
+    document.getElementById("dash-summary-capacity-next").innerHTML = "";
     document.getElementById("dash-summary-renewal").innerHTML = "";
   });
 }
@@ -6048,6 +6054,23 @@ function dashLoad(){
 function dashLoadCapacity(token){
   var tablesEl = document.getElementById("dash-capacity-tables");
   tablesEl.innerHTML = "";
+  var seasonGrids = {};
+  DASH_CAPACITY_SOURCES.forEach(function(src){
+    if(!seasonGrids[src.seasonLabel]){
+      var block = document.createElement("div");
+      block.className = "dash-season-block";
+      var h = document.createElement("div");
+      h.className = "dash-season-h";
+      h.textContent = src.seasonLabel;
+      var grid = document.createElement("div");
+      grid.className = "dash-season-grid";
+      grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px";
+      block.appendChild(h);
+      block.appendChild(grid);
+      tablesEl.appendChild(block);
+      seasonGrids[src.seasonLabel] = grid;
+    }
+  });
   var chain = Promise.resolve();
   var results = [];
   DASH_CAPACITY_SOURCES.forEach(function(src){
@@ -6064,8 +6087,19 @@ function dashLoadCapacity(token){
             .map(function(r){ return { category:r._label, quota:r["名額"], enrolled:r["正式生"], rate:dashToPct(r["滿班率"]) }; });
           var rec = { branch:src.branch, seasonLabel:src.seasonLabel, fileName:file.name, fileUrl:file.webUrl, rows:rows };
           results.push(rec);
-          tablesEl.appendChild(dashRenderCapacityTable(rec));
+          seasonGrids[src.seasonLabel].appendChild(dashRenderCapacityTable(rec));
         });
+      }).catch(function(e){
+        if(src.season===DASH_SEASON_NEXT && /找不到指定季度/.test((e && e.message) || "")){
+          var rec = {
+            branch:src.branch, seasonLabel:src.seasonLabel, fileName:null, fileUrl:null,
+            rows: DASH_CAPACITY_CATEGORIES.map(function(cat){ return { category:cat, quota:null, enrolled:null, rate:null }; })
+          };
+          results.push(rec);
+          seasonGrids[src.seasonLabel].appendChild(dashRenderCapacityTable(rec));
+          return;
+        }
+        throw e;
       });
     });
   });
@@ -6102,6 +6136,7 @@ function dashLoadRenewal(token){
 }
 
 function dashSourceLine(rec){
+  if(!rec.fileName){ return "來源：尚未建立本季檔案"; }
   return rec.fileUrl
     ? "<a href='"+rec.fileUrl+"' target='_blank' rel='noopener' style='color:var(--bl)'>來源："+rec.fileName+"</a>"
     : "來源："+rec.fileName;
@@ -6118,6 +6153,7 @@ var DASH_CAPACITY_GROUPS = [
   ["E","F","兒童"],
   ["初階","進階","TOTAL"]
 ];
+var DASH_CAPACITY_CATEGORIES = Array.prototype.concat.apply([], DASH_CAPACITY_GROUPS);
 function dashGroupIndex(label){
   for(var i=0;i<DASH_CAPACITY_GROUPS.length;i++){
     if(DASH_CAPACITY_GROUPS[i].indexOf(label)>=0) return i;
@@ -6147,12 +6183,12 @@ function dashRenderCapacityTable(rec){
       "<td style='"+bstyle+"'>"+r.category+"</td>"+
       "<td style='text-align:right;"+bstyle+"'>"+(enrolled==null?"-":enrolled)+" / "+(quota==null?"-":quota)+"</td>"+
       "<td style='text-align:right;"+bstyle+"'>"+(remain==null?"-":remain)+"</td>"+
-      "<td style='text-align:right;"+bstyle+"'>"+dashRateBadge(r.rate)+"</td>"+
+      "<td style='text-align:right;"+bstyle+"'>"+(r.rate==null?"-":dashRateBadge(r.rate))+"</td>"+
       "</tr>";
   }).join("");
   var wrap = document.createElement("div");
   wrap.innerHTML =
-    "<div class='tw dash-tbl'><table><thead><tr><th>"+rec.branch+(rec.seasonLabel?" "+rec.seasonLabel:"")+"</th><th style='text-align:right'>正式生/開班名額</th>"+
+    "<div class='tw dash-tbl'><table><thead><tr><th>"+rec.branch+"</th><th style='text-align:right'>正式生/開班名額</th>"+
     "<th style='text-align:right'>剩餘名額</th><th style='text-align:right'>滿班率</th></tr></thead>"+
     "<tbody>"+(body || "<tr><td colspan='4' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>"+dashSourceLine(rec)+"</div>";
@@ -6194,30 +6230,33 @@ function dashCardHtml(c){
 function dashRenderSummary(capacityResults, renewalResults){
   function advancedCapacityRate(rec){
     var row = (rec.rows||[]).filter(function(r){ return r.category==="初階"; })[0];
-    return row ? row.rate : 0;
+    return (row && row.rate!=null) ? row.rate : null;
   }
   function avg(list){
     return list.length ? list.reduce(function(a,b){ return a+b; },0)/list.length : 0;
   }
-  var capCards = [];
   var seasonGroups = [];
   capacityResults.forEach(function(rec){
     var g = seasonGroups.filter(function(x){ return x.seasonLabel===rec.seasonLabel; })[0];
     if(!g){ g = { seasonLabel:rec.seasonLabel, recs:[] }; seasonGroups.push(g); }
     g.recs.push(rec);
   });
-  seasonGroups.forEach(function(g){
+  function buildSeasonCards(g){
+    var cards = [];
     var rates = [];
     g.recs.forEach(function(rec){
       var rate = advancedCapacityRate(rec);
-      rates.push(rate);
-      capCards.push({ label:rec.branch+" "+g.seasonLabel+" 初階滿班率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
+      if(rate!=null){ rates.push(rate); }
+      cards.push({ label:rec.branch+" "+g.seasonLabel+" 初階滿班率", value:(rate==null?"-":rate.toFixed(2)+"%"), cls:(rate==null?"":dashRateClass(rate)) });
     });
     if(rates.length){
       var a = avg(rates);
-      capCards.push({ label:"平均 "+g.seasonLabel+" 初階滿班率", value:a.toFixed(2)+"%", cls:dashRateClass(a) });
+      cards.push({ label:"平均 "+g.seasonLabel+" 初階滿班率", value:a.toFixed(2)+"%", cls:dashRateClass(a) });
     }
-  });
+    return cards;
+  }
+  var currentCards = seasonGroups[0] ? buildSeasonCards(seasonGroups[0]) : [];
+  var nextCards = seasonGroups[1] ? buildSeasonCards(seasonGroups[1]) : [];
   var renCards = [];
   var renRates = [];
   renewalResults.forEach(function(rec){
@@ -6229,7 +6268,8 @@ function dashRenderSummary(capacityResults, renewalResults){
     var renAvg = avg(renRates);
     renCards.push({ label:"平均 續報率", value:renAvg.toFixed(2)+"%", cls:dashRateClass(renAvg) });
   }
-  document.getElementById("dash-summary-capacity").innerHTML = capCards.map(dashCardHtml).join("");
+  document.getElementById("dash-summary-capacity-current").innerHTML = currentCards.map(dashCardHtml).join("");
+  document.getElementById("dash-summary-capacity-next").innerHTML = nextCards.map(dashCardHtml).join("");
   document.getElementById("dash-summary-renewal").innerHTML = renCards.map(dashCardHtml).join("");
 }
 
