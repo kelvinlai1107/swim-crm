@@ -212,7 +212,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .dup-entry.excluded{opacity:.45;text-decoration:line-through}
 .upload-drop{border:2px dashed var(--bd2);border-radius:var(--rl);padding:32px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sf)}
 .upload-drop:hover,.upload-drop.drag-over{border-color:var(--bl);background:var(--bl-bg)}
-.mgmt-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center}.mgmt-ov.open{display:flex}.mgmt-pn{background:var(--sf);border-radius:var(--rl);width:560px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2)}.mgmt-hd{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}.mgmt-bd{padding:20px;overflow-y:auto;flex:1}.mgmt-ft{padding:14px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}.usr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.usr-row:last-child{border-bottom:none}.usr-email{flex:1;font-family:monospace;font-size:12px;color:var(--tx2)}.usr-role-sel{height:30px;border:1px solid var(--bd2);border-radius:var(--r);padding:0 8px;font-size:12px;font-family:inherit;background:var(--sf);cursor:pointer}.app.authed{display:grid}
+.mgmt-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center}.mgmt-ov.open{display:flex}.mgmt-pn{background:var(--sf);border-radius:var(--rl);width:560px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2)}.mgmt-hd{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}.mgmt-bd{padding:20px;overflow-y:auto;flex:1}.mgmt-ft{padding:14px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}.usr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.usr-row:last-child{border-bottom:none}.usr-email{flex:1;font-family:monospace;font-size:12px;color:var(--tx2)}.usr-role-sel{height:30px;border:1px solid var(--bd2);border-radius:var(--r);padding:0 8px;font-size:12px;font-family:inherit;background:var(--sf);cursor:pointer}.perm-role-row{border:1px solid var(--bd);border-radius:var(--r);margin-bottom:8px;overflow:hidden}.perm-role-hd{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,0,0,.03)}.perm-role-name{flex:1;font-size:13px;font-weight:600;border:none;background:none;font-family:inherit;color:inherit;min-width:0}.perm-feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px}.perm-feat-chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2)}.app.authed{display:grid}
 .formal-hall-btn{padding:5px 14px;border-radius:20px;border:1.5px solid var(--bd2);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;color:var(--tx2);transition:all .15s}
 .formal-hall-btn.active{background:var(--bl);border-color:var(--bl);color:#fff}
 .formal-vtab{padding:4px 12px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--sf);font-size:12px;cursor:pointer;color:var(--tx2)}
@@ -319,31 +319,35 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 </div>
 <!-- User Management Panel (admin only) -->
 <div class="mgmt-ov" id="mgmt-ov">
-  <div class="mgmt-pn">
+  <div class="mgmt-pn" style="width:720px">
     <div class="mgmt-hd">
       <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M16 11l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span style="font-size:15px;font-weight:700">帳號權限管理</span>
-      <span style="font-size:12px;color:var(--tx3);margin-left:4px">變更後立即生效（下次登入套用）</span>
+      <span id="mgmt-save-status" style="font-size:12px;color:var(--tx3);margin-left:4px"></span>
       <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:18px" onclick="document.getElementById('mgmt-ov').classList.remove('open')">×</button>
     </div>
     <div class="mgmt-bd">
       <div class="al al-tl" style="margin-bottom:16px;font-size:12px">
         <svg width="14" height="14" fill="none" viewBox="0 0 16 16" style="flex-shrink:0"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l2 2 3-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>權限清單儲存在本機，上傳新版 index.html 才能永久儲存。設定完成後請點「產生新版 index.html」下載並重新上傳 GitHub。</span>
+        <span>設定會自動儲存到雲端（SharePoint），所有裝置下次登入即套用，不需要上傳 index.html。</span>
       </div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">角色與功能權限</div>
+      <div id="mgmt-role-list" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <input id="mgmt-new-role-name" class="fi2" placeholder="新增角色名稱" style="flex:1">
+        <button class="btn bs sm" onclick="permAddRole()">新增角色</button>
+      </div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">帳號指派</div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <input id="mgmt-new-email" class="fi2" placeholder="新增帳號 email（xxx@lalasobaby.com）" style="flex:1">
-        <select id="mgmt-new-role" class="fse" style="width:120px">
-          <option value="admin">管理員</option>
-          <option value="store" selected>門市老師</option>
-        </select>
+        <select id="mgmt-new-role" class="fse" style="width:140px"></select>
         <button class="btn bp sm" onclick="mgmtAddUser()">新增</button>
       </div>
       <div id="mgmt-user-list"></div>
     </div>
     <div class="mgmt-ft">
       <button class="btn bs sm" onclick="document.getElementById('mgmt-ov').classList.remove('open')">關閉</button>
-      <button class="btn bp sm" onclick="mgmtExportHTML()">產生新版 index.html 並下載</button>
+      <button class="btn bp sm" onclick="mgmtSaveAll()">儲存設定</button>
     </div>
   </div>
 </div>
@@ -1536,21 +1540,135 @@ var NCC=[
 var RV_RAW = [];
 var RV_DUPS = [];
 var RV_CHOICES = {}
-// ── Config ───────────────────────────────
 // ── Config ───────────────────────────────────────────────────────────────
 var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
 var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
 var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
 
+// Legacy bootstrap lists — used ONLY to seed default roles/users the first
+// time this app runs before any cloud permission data has been saved.
 var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
 var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
+
+// ── Permission model ────────────────────────────────────────────────────
+// Each entry: {key, label, ni:[dom ids hidden/shown together for this feature]}
+var PERM_FEATURES = [
+  {key:"students",  label:"所有學員",     ni:["ni-students","ni-formal","ni-classmgmt"]},
+  {key:"ncc",       label:"NCC 體驗追蹤",  ni:["ni-ncc"]},
+  {key:"package",   label:"套票生管理",    ni:["ni-package"]},
+  {key:"renewal",   label:"續報作業",      ni:["ni-renewal"]},
+  {key:"seat",      label:"劃位管理",      ni:["ni-seat"]},
+  {key:"cpr",       label:"學習進度 CPR",  ni:["ni-cpr"]},
+  {key:"register",  label:"報名紀錄",      ni:["ni-register"]},
+  {key:"mkt",       label:"行銷分析",      ni:["ni-mkt"]},
+  {key:"dashboard", label:"儀表板",        ni:["ni-dashboard"]}
+];
+
+var _permDefaultRoles = {
+  admin: { label:"管理員",   manage:true,  features: PERM_FEATURES.map(function(f){ return f.key; }) },
+  store: { label:"門市老師", manage:false, features:["renewal"] }
+};
+var _permDefaultUsers = {};
+ADMIN_EMAILS.forEach(function(e){ _permDefaultUsers[e.toLowerCase()] = "admin"; });
+STORE_EMAILS.forEach(function(e){ _permDefaultUsers[e.toLowerCase()] = "store"; });
+
+// Current in-memory permission data — PERM_ROLES/PERM_USERS are populated
+// synchronously with defaults immediately below, then (if possible)
+// overwritten with cloud data by permLoad().
+var PERM_ROLES = JSON.parse(JSON.stringify(_permDefaultRoles));
+var PERM_USERS = JSON.parse(JSON.stringify(_permDefaultUsers));
 
 function getUserRole(email){
   if(!email) return "none";
   var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
+  if(PERM_USERS && Object.prototype.hasOwnProperty.call(PERM_USERS, e)) return PERM_USERS[e];
+  return "none";
+}
+
+// ── Cloud persistence for permission data (independent of the SharePoint
+// auto-sync feature used for app data, to avoid any race with it) ────────
+var PERM_SITE_HOST = "lalaso.sharepoint.com";
+var PERM_SITE_PATH = "/sites/c-level2";
+var PERM_LIB_NAME  = "DocLib3";
+var PERM_FOLDER    = "Claude/LALASO CRM/JSON";
+var PERM_FILE      = "swim-crm-permissions.json";
+var _permDriveId = null, _permSiteId = null;
+
+function permStrip(s){ return (s||"").replace(/[\s\[\]]/g,"").toLowerCase(); }
+
+function permGetToken(interactive){
+  var req = { scopes:["Sites.ReadWrite.All"], account: _msalApp.getAllAccounts()[0] };
+  return _msalApp.acquireTokenSilent(req).then(function(r){ return r.accessToken; })
+    .catch(function(err){
+      if(!interactive) throw err;
+      return _msalApp.acquireTokenPopup(req).then(function(r){ return r.accessToken; });
+    });
+}
+
+function permGraphFetch(url, token, opts){
+  opts = opts || {};
+  var headers = {};
+  for(var k in (opts.headers||{})) headers[k] = opts.headers[k];
+  headers["Authorization"] = "Bearer " + token;
+  var merged = {};
+  for(var k2 in opts) merged[k2] = opts[k2];
+  merged.headers = headers;
+  return fetch(url, merged);
+}
+
+function permResolveDrive(token){
+  if(_permDriveId) return Promise.resolve(_permDriveId);
+  return permGraphFetch("https://graph.microsoft.com/v1.0/sites/"+PERM_SITE_HOST+":"+PERM_SITE_PATH, token)
+    .then(function(r){ return r.json(); })
+    .then(function(site){
+      _permSiteId = site.id;
+      return permGraphFetch("https://graph.microsoft.com/v1.0/sites/"+_permSiteId+"/drives", token);
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(dr){
+      var target = permStrip(PERM_LIB_NAME);
+      var match = (dr.value||[]).filter(function(d){ return permStrip(d.name)===target; })[0];
+      if(!match) throw new Error("找不到文件庫 "+PERM_LIB_NAME);
+      _permDriveId = match.id;
+      return _permDriveId;
+    });
+}
+
+function permItemUrl(driveId){
+  return "https://graph.microsoft.com/v1.0/drives/"+driveId+"/root:/"+encodeURI(PERM_FOLDER+"/"+PERM_FILE)+":/content";
+}
+
+function permLoad(){
+  return permGetToken(false).then(function(token){
+    return permResolveDrive(token).then(function(driveId){
+      return permGraphFetch(permItemUrl(driveId), token).then(function(r){
+        if(r.status === 404) throw new Error("not_found");
+        if(!r.ok) throw new Error("http_"+r.status);
+        return r.json();
+      });
+    });
+  }).then(function(data){
+    if(data && data.roles && data.users){
+      PERM_ROLES = data.roles;
+      PERM_USERS = data.users;
+    } else {
+      throw new Error("bad_shape");
+    }
+  }).catch(function(err){
+    console.warn("[perm] 雲端權限設定讀取失敗，暫用預設值：", err && err.message);
+  });
+}
+
+function permSave(){
+  return permGetToken(true).then(function(token){
+    return permResolveDrive(token).then(function(driveId){
+      var body = JSON.stringify({ roles: PERM_ROLES, users: PERM_USERS, savedAt: new Date().toISOString(), savedBy: _msalEmail });
+      return permGraphFetch(permItemUrl(driveId), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
+    });
+  }).then(function(r){
+    if(!r.ok) throw new Error("http_"+r.status);
+    return true;
+  });
 }
 
 var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
@@ -1583,20 +1701,23 @@ function msalSignOut(){
 }
 
 function msalApplyAccess(){
-  _msalRole = getUserRole(_msalEmail);
-  if(_msalRole === "none"){
+  document.getElementById("msal-loading").classList.add("show");
+  permLoad().then(function(){
+    _msalRole = getUserRole(_msalEmail);
+    if(_msalRole === "none"){
+      document.getElementById("msal-loading").classList.remove("show");
+      document.getElementById("msal-login-screen").classList.add("show");
+      setTimeout(function(){ alert("此帳號 ("+_msalEmail+") 無存取權限，請聯絡管理員。"); }, 200);
+      return;
+    }
+    document.getElementById("msal-login-screen").classList.remove("show");
     document.getElementById("msal-loading").classList.remove("show");
-    document.getElementById("msal-login-screen").classList.add("show");
-    setTimeout(function(){ alert("此帳號 ("+_msalEmail+") 無存取權限，請聯絡管理員。"); }, 200);
-    return;
-  }
-  document.getElementById("msal-login-screen").classList.remove("show");
-  document.getElementById("msal-loading").classList.remove("show");
-  document.querySelector(".app").classList.add("authed");
-  applyRoleUI(_msalRole, _msalEmail, _msalName);
+    document.querySelector(".app").classList.add("authed");
+    applyRoleUI(_msalRole, _msalEmail, _msalName);
+  });
 }
 
-function applyRoleUI(role, email, name){
+function applyRoleUI(roleKey, email, name){
   if(document.querySelector(".user-chip")) return; // already applied
   var avEl   = document.querySelector(".av");
   var nameEl = document.querySelector(".u-area span");
@@ -1613,64 +1734,152 @@ function applyRoleUI(role, email, name){
   }
 
   seasonInit();
-  if(role === "admin"){
-    if(uArea){
-      var btn = document.createElement("button");
-      btn.className = "btn bs sm";
-      btn.style.marginLeft = "4px";
-      btn.innerHTML = "&#9881; 帳號管理";
-      btn.onclick = mgmtOpen;
-      uArea.appendChild(btn);
-      if(typeof spCfgOpen === "function"){
-        var spBtn = document.createElement("button");
-        spBtn.className = "btn bs sm";
-        spBtn.style.marginLeft = "4px";
-        spBtn.innerHTML = "&#9729; 同步設定";
-        spBtn.onclick = spCfgOpen;
-        uArea.appendChild(spBtn);
-      }
+
+  var roleDef = (PERM_ROLES && PERM_ROLES[roleKey]) || {features:[], manage:false};
+  var allowed = {};
+  (roleDef.features||[]).forEach(function(k){ allowed[k]=true; });
+  var canManage = !!roleDef.manage;
+
+  if(canManage && uArea){
+    var btn = document.createElement("button");
+    btn.className = "btn bs sm";
+    btn.style.marginLeft = "4px";
+    btn.innerHTML = "&#9881; 帳號管理";
+    btn.onclick = mgmtOpen;
+    uArea.appendChild(btn);
+    if(typeof spCfgOpen === "function"){
+      var spBtn = document.createElement("button");
+      spBtn.className = "btn bs sm";
+      spBtn.style.marginLeft = "4px";
+      spBtn.innerHTML = "&#9729; 同步設定";
+      spBtn.onclick = spCfgOpen;
+      uArea.appendChild(spBtn);
     }
-    document.querySelectorAll(".ni").forEach(function(n){ n.style.display=""; });
-    G("students");
-  } else {
-    document.querySelectorAll(".ni").forEach(function(n){
-      if((n.getAttribute("onclick")||"").indexOf("renewal") < 0) n.style.display="none";
-    });
-    document.querySelectorAll(".nl").forEach(function(nl){
-      var sib=nl.nextElementSibling, allHidden=true;
-      while(sib && !sib.classList.contains("nl")){
-        if(sib.classList.contains("ni") && sib.style.display!=="none"){ allHidden=false; break; }
-        sib=sib.nextElementSibling;
-      }
-      if(allHidden) nl.style.display="none";
-    });
-    G("renewal");
   }
+
+  PERM_FEATURES.forEach(function(f){
+    var show = !!allowed[f.key];
+    (f.ni||[]).forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = show ? "" : "none";
+    });
+  });
+  document.querySelectorAll(".nl").forEach(function(nl){
+    var sib=nl.nextElementSibling, allHidden=true;
+    while(sib && !sib.classList.contains("nl")){
+      if(sib.classList.contains("ni") && sib.style.display!=="none"){ allHidden=false; break; }
+      sib=sib.nextElementSibling;
+    }
+    nl.style.display = allHidden ? "none" : "";
+  });
+
+  var firstKey = null;
+  for(var i=0;i<PERM_FEATURES.length;i++){
+    if(allowed[PERM_FEATURES[i].key]){ firstKey = PERM_FEATURES[i].key; break; }
+  }
+  G(firstKey || "renewal");
 }
-// ── User Management ───────────────────────────────────────────────────────
+
+// ── Role / User Management ────────────────────────────────────────────────
 function mgmtOpen(){
-  if(_msalRole !== "admin"){ alert("僅管理員可存取"); return; }
-  mgmtRenderList();
+  if(!((PERM_ROLES[_msalRole]||{}).manage)){ alert("僅限有帳號管理權限的角色使用"); return; }
+  mgmtRenderRoles();
+  mgmtRenderUsers();
+  var st = document.getElementById("mgmt-save-status");
+  if(st) st.textContent = "";
   document.getElementById("mgmt-ov").classList.add("open");
 }
 
-function mgmtRenderList(){
-  var allUsers = [];
-  ADMIN_EMAILS.forEach(function(e){ allUsers.push({email:e, role:"admin"}); });
-  STORE_EMAILS.forEach(function(e){ allUsers.push({email:e, role:"store"}); });
+function mgmtRenderRoles(){
   var html = "";
-  if(!allUsers.length){
+  Object.keys(PERM_ROLES).forEach(function(key){
+    var r = PERM_ROLES[key];
+    html += "<div class='perm-role-row' data-role='"+key+"'>";
+    html += "<div class='perm-role-hd'>";
+    html += "<input class='perm-role-name' value=\""+String(r.label||key).replace(/\"/g,"&quot;")+"\" data-role='"+key+"' onchange='permRenameRole(this)'>";
+    html += "<label style='display:flex;align-items:center;gap:4px;font-size:12px;color:var(--tx2);white-space:nowrap'>"
+          + "<input type='checkbox' "+(r.manage?"checked":"")+" data-role='"+key+"' onchange='permToggleManage(this)'> 可管理帳號"
+          + "</label>";
+    if(Object.keys(PERM_ROLES).length > 1){
+      html += "<button class='btn bg sm' style='font-size:11px;color:var(--rd)' data-role='"+key+"' onclick='permRemoveRole(this)'>刪除角色</button>";
+    }
+    html += "</div>";
+    html += "<div class='perm-feat-grid'>";
+    PERM_FEATURES.forEach(function(f){
+      var checked = (r.features||[]).indexOf(f.key) >= 0;
+      html += "<label class='perm-feat-chk'><input type='checkbox' "+(checked?"checked":"")+" data-role='"+key+"' data-feat='"+f.key+"' onchange='permToggleFeature(this)'> "+f.label+"</label>";
+    });
+    html += "</div></div>";
+  });
+  document.getElementById("mgmt-role-list").innerHTML = html;
+}
+
+function permToggleFeature(cb){
+  var role = cb.dataset.role, feat = cb.dataset.feat;
+  var r = PERM_ROLES[role]; if(!r) return;
+  r.features = r.features || [];
+  var i = r.features.indexOf(feat);
+  if(cb.checked){ if(i<0) r.features.push(feat); }
+  else { if(i>=0) r.features.splice(i,1); }
+}
+
+function permToggleManage(cb){
+  var role = cb.dataset.role;
+  if(PERM_ROLES[role]) PERM_ROLES[role].manage = cb.checked;
+}
+
+function permRenameRole(inp){
+  var role = inp.dataset.role;
+  var val = (inp.value||"").trim();
+  if(!val){ inp.value = PERM_ROLES[role].label || role; return; }
+  if(PERM_ROLES[role]) PERM_ROLES[role].label = val;
+  mgmtRenderUsers();
+}
+
+function permAddRole(){
+  var nameInp = document.getElementById("mgmt-new-role-name");
+  var label = (nameInp.value||"").trim();
+  if(!label){ alert("請輸入角色名稱"); return; }
+  var key = "role_" + Date.now().toString(36);
+  PERM_ROLES[key] = { label: label, manage:false, features:[] };
+  nameInp.value = "";
+  mgmtRenderRoles();
+  mgmtRenderUsers();
+}
+
+function permRemoveRole(btn){
+  var role = btn.dataset.role;
+  if(Object.keys(PERM_ROLES).length <= 1){ alert("至少需保留一個角色"); return; }
+  var inUse = Object.keys(PERM_USERS).some(function(e){ return PERM_USERS[e]===role; });
+  if(inUse){ alert("此角色仍有帳號使用中，請先將該帳號改為其他角色"); return; }
+  if(!confirm("確定刪除角色「"+(PERM_ROLES[role].label||role)+"」？")) return;
+  delete PERM_ROLES[role];
+  mgmtRenderRoles();
+  mgmtRenderUsers();
+}
+
+function permRoleOptionsHtml(selected){
+  var html = "";
+  Object.keys(PERM_ROLES).forEach(function(key){
+    html += "<option value='"+key+"'"+(key===selected?" selected":"")+">"+(PERM_ROLES[key].label||key)+"</option>";
+  });
+  return html;
+}
+
+function mgmtRenderUsers(){
+  var roleSel = document.getElementById("mgmt-new-role");
+  if(roleSel) roleSel.innerHTML = permRoleOptionsHtml(Object.keys(PERM_ROLES)[0]);
+  var emails = Object.keys(PERM_USERS);
+  var html = "";
+  if(!emails.length){
     html = "<div style='text-align:center;color:var(--tx3);padding:16px;font-size:13px'>尚無帳號</div>";
   }
-  allUsers.forEach(function(u){
+  emails.forEach(function(e){
     html += "<div class='usr-row'>";
-    html += "<span class='usr-email'>" + u.email + "</span>";
-    html += "<select class='usr-role-sel' data-email='" + u.email + "' onchange='mgmtChangeRole(this)'>";
-    html += "<option value='admin'" + (u.role==="admin"?" selected":"") + ">管理員</option>";
-    html += "<option value='store'" + (u.role==="store"?" selected":"") + ">門市老師</option>";
-    html += "</select>";
+    html += "<span class='usr-email'>" + e + "</span>";
+    html += "<select class='usr-role-sel' data-email='" + e + "' onchange='mgmtChangeRole(this)'>" + permRoleOptionsHtml(PERM_USERS[e]) + "</select>";
     html += "<button class='btn bg sm' style='font-size:11px;color:var(--rd)' "
-          + "data-email='" + u.email + "' onclick='mgmtRemoveUser(this)'>移除</button>";
+          + "data-email='" + e + "' onclick='mgmtRemoveUser(this)'>移除</button>";
     html += "</div>";
   });
   document.getElementById("mgmt-user-list").innerHTML = html;
@@ -1680,332 +1889,34 @@ function mgmtAddUser(){
   var email = (document.getElementById("mgmt-new-email").value||"").trim().toLowerCase();
   var role  = document.getElementById("mgmt-new-role").value;
   if(!email || email.indexOf("@")<0){ alert("請輸入有效 email"); return; }
-  ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email; });
-  STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email; });
-  if(role==="admin") ADMIN_EMAILS.push(email);
-  else STORE_EMAILS.push(email);
+  PERM_USERS[email] = role;
   document.getElementById("mgmt-new-email").value = "";
-  mgmtRenderList();
+  mgmtRenderUsers();
 }
 
 function mgmtRemoveUser(btn){
   var email = btn.dataset.email;
   if(!confirm("確定移除 "+email+" 的存取權限？")) return;
-  ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  mgmtRenderList();
+  delete PERM_USERS[email];
+  mgmtRenderUsers();
 }
 
 function mgmtChangeRole(sel){
-  var email = sel.dataset.email;
-  var role  = sel.value;
-  ADMIN_EMAILS = ADMIN_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  STORE_EMAILS = STORE_EMAILS.filter(function(e){ return e.toLowerCase()!==email.toLowerCase(); });
-  if(role==="admin") ADMIN_EMAILS.push(email);
-  else STORE_EMAILS.push(email);
+  PERM_USERS[sel.dataset.email] = sel.value;
 }
 
-function mgmtExportHTML(){
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", window.location.href, true);
-  xhr.onload = function(){
-    if(xhr.status !== 200){ alert("無法讀取原始檔案"); return; }
-    var src = xhr.responseText;
-    src = src.replace(/var ADMIN_EMAILS = \[[^\]]*\];/, "var ADMIN_EMAILS = "+JSON.stringify(ADMIN_EMAILS)+";");
-    src = src.replace(/var STORE_EMAILS = \[[^\]]*\];/, "var STORE_EMAILS = "+JSON.stringify(STORE_EMAILS)+";");
-    var blob = new Blob([src], {type:"text/html;charset=utf-8"});
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "index.html";
-    a.click();
-    URL.revokeObjectURL(a.href);
-    alert("index.html 已下載！\n請上傳至 GitHub 取代原本的檔案。");
-  };
-  xhr.send();
+function mgmtSaveAll(){
+  var statusEl = document.getElementById("mgmt-save-status");
+  if(statusEl) statusEl.textContent = "儲存中…";
+  permSave().then(function(){
+    if(statusEl){ statusEl.textContent = "已儲存"; setTimeout(function(){ statusEl.textContent=""; }, 2500); }
+  }).catch(function(err){
+    console.error("[perm] 儲存失敗", err);
+    if(statusEl) statusEl.textContent = "儲存失敗，請再試一次";
+    alert("儲存失敗，請確認網路連線並再試一次。");
+  });
 }
 
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
-
-
-
-
-
-// ── User Management ───────────────────────────────────────────────────────
-
-
-
-
-
-
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
-
-
-
-
-
-// ── User Management ───────────────────────────────────────────────────────
-
-
-
-
-
-
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
-
-
-
-
-
-// ── User Management ───────────────────────────────────────────────────────
-
-
-
-
-
-
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
-
-
-
-
-
-// ── User Management ───────────────────────────────────────────────────────
-
-
-
-
-
-
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
-
-
-
-
-
-// ── User Management ───────────────────────────────────────────────────────
-
-
-
-
-
-
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
-
-
-
-
-
-// ── User Management ───────────────────────────────────────────────────────
-
-
-
-
-
-
-var _ct='all',_nid='',_rvCls='';
-var IBL={formal:'正式生',package:'套票生',trial:'體驗生',pause:'中斷生'};
-var IBC={formal:'if',package:'ip',trial:'it',pause:'iz'};
-var CTC={'親子N':'t-tl','親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','幼兒E':'t-bl','幼兒F':'t-bl','兒童D':'t-am','兒童E':'t-am','兒童F':'t-am','套票A':'t-pu','套票B':'t-pu'};
-var SLB={S1:'春季',S2:'夏季',S3:'秋季'};
-var HCL={'西屯':'t-bl','北屯':'t-pu'};
-var CLS_TC={'親子A':'t-tl','親子B':'t-tl','幼兒C':'t-bl','幼兒D':'t-bl','兒童E':'t-am','兒童F':'t-am'};
-var CLS_ORD=['親子A','親子B','幼兒C','幼兒D','兒童E','兒童F'];
-var DAYS=['週二','週三','週四','週五','週六'];
-var TIMES=['09:20','09:30','09:40','10:20','10:30','10:40','11:20','11:30','11:40','15:00','15:10','15:20','15:30','16:00','16:10','16:20','16:30','17:10','17:20','17:30','18:30','18:40','19:30','19:40'];
-
-// ── Config ───────────────────────────────────────────────────────────────
-var MSAL_CLIENT_ID = "8f079756-1dff-4f91-85f8-6187149fdf45";
-var MSAL_TENANT_ID = "bde3feff-2c6c-4cb7-b2e4-789e237185a3";
-var MSAL_REDIRECT  = "https://kelvinlai1107.github.io/swim-crm/";
-
-var ADMIN_EMAILS = ["kelvin1107@lalasobaby.com"];
-var STORE_EMAILS = ["yoyo1128@lalasobaby.com"];
-
-function getUserRole(email){
-  if(!email) return "none";
-  var e = email.toLowerCase();
-  if(ADMIN_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "admin";
-  if(STORE_EMAILS.some(function(a){ return a.toLowerCase()===e; })) return "store";
-  return "store";
-}
-
-var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
-
-// ── Init after page fully loaded ─────────────────────────────────────────
 // ── Season Management ────────────────────────────────────────────────────
 var _curSeason = 'S2';  // default = current HTML data
 var SLB = {S1:'春季',S2:'夏季',S3:'秋季'};
