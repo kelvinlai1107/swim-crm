@@ -1585,16 +1585,44 @@ function getUserRole(email){
   return "none";
 }
 
-// ── Cloud persistence for permission data (independent of the SharePoint
-// auto-sync feature used for app data, to avoid any race with it) ────────
-var PERM_SITE_HOST = "lalaso.sharepoint.com";
-var PERM_SITE_PATH = "/sites/c-level2";
-var PERM_LIB_NAME  = "DocLib3";
-var PERM_FOLDER    = "Claude/LALASO CRM/JSON";
-var PERM_FILE      = "swim-crm-permissions.json";
+// ── Cloud persistence for permission data ──────────────────────────────
+// Reuses the SAME site/library/folder config as the existing SharePoint
+// 自動同步 feature (localStorage key "sp_sync_cfg", editable via 「☁ 同步
+// 設定」), so permission data lands in the same place the admin already
+// configured — but under its own file name, via an independent fetch/push
+// path (no shared timers/state with that feature, to avoid races).
+var PERM_FILE = "swim-crm-permissions.json";
 var _permDriveId = null, _permSiteId = null;
 
-function permStrip(s){ return (s||"").replace(/[\s\[\]]/g,"").toLowerCase(); }
+function permGetConfig(){
+  var def = { site: "https://lalaso.sharepoint.com/sites/c-level2/", lib: "DocLib3", folder: "Claude/LALASO CRM/JSON" };
+  try{
+    var raw = localStorage.getItem("sp_sync_cfg");
+    if(raw){
+      var saved = JSON.parse(raw);
+      return {
+        site: saved.site || def.site,
+        lib: saved.lib || def.lib,
+        folder: (saved.folder != null) ? saved.folder : def.folder
+      };
+    }
+  }catch(e){}
+  return def;
+}
+
+function permParseSite(siteUrl){
+  var m = String(siteUrl || "").match(/^https?:\/\/([^\/]+)(\/sites\/[^\/]+)/i);
+  if(!m) return null;
+  return { host: m[1], path: m[2] };
+}
+
+function permFolderSegments(cfg){
+  return String(cfg.folder || "").split("/").map(function(s){ return s.trim(); }).filter(function(s){ return s.length; });
+}
+
+function permEncodePath(segments){
+  return segments.map(function(s){ return encodeURIComponent(s); }).join("/");
+}
 
 function permGetToken(interactive){
   var req = { scopes:["Sites.ReadWrite.All"], account: _msalApp.getAllAccounts()[0] };
@@ -1613,12 +1641,24 @@ function permGraphFetch(url, token, opts){
   var merged = {};
   for(var k2 in opts) merged[k2] = opts[k2];
   merged.headers = headers;
-  return fetch(url, merged);
+  return fetch(url, merged).then(function(resp){
+    if(!resp.ok){
+      return resp.text().then(function(t){
+        var err = new Error("Graph API 錯誤 " + resp.status + ": " + (t || "").slice(0, 300));
+        err.status = resp.status;
+        throw err;
+      });
+    }
+    return resp;
+  });
 }
 
-function permResolveDrive(token){
+function permResolveDrive(token, cfg){
   if(_permDriveId) return Promise.resolve(_permDriveId);
-  return permGraphFetch("https://graph.microsoft.com/v1.0/sites/"+PERM_SITE_HOST+":"+PERM_SITE_PATH, token)
+  var siteInfo = permParseSite(cfg.site);
+  if(!siteInfo) return Promise.reject(new Error("SharePoint 網站網址格式看起來不對："+cfg.site));
+  var siteUrl = "https://graph.microsoft.com/v1.0/sites/"+siteInfo.host+":"+siteInfo.path;
+  return permGraphFetch(siteUrl, token)
     .then(function(r){ return r.json(); })
     .then(function(site){
       _permSiteId = site.id;
@@ -1626,24 +1666,31 @@ function permResolveDrive(token){
     })
     .then(function(r){ return r.json(); })
     .then(function(dr){
-      var target = permStrip(PERM_LIB_NAME);
-      var match = (dr.value||[]).filter(function(d){ return permStrip(d.name)===target; })[0];
-      if(!match) throw new Error("找不到文件庫 "+PERM_LIB_NAME);
+      var drives = dr.value || [];
+      var wantLib = (cfg.lib || "").toLowerCase();
+      var match = drives.filter(function(d){
+        var seg = String(d.webUrl || "").replace(/\/$/, "").split("/").pop() || "";
+        return seg.toLowerCase() === wantLib;
+      })[0];
+      if(!match){
+        match = drives.filter(function(d){ return (d.name || "").toLowerCase() === wantLib; })[0];
+      }
+      if(!match) throw new Error("找不到文件庫 "+cfg.lib);
       _permDriveId = match.id;
       return _permDriveId;
     });
 }
 
-function permItemUrl(driveId){
-  return "https://graph.microsoft.com/v1.0/drives/"+driveId+"/root:/"+encodeURI(PERM_FOLDER+"/"+PERM_FILE)+":/content";
+function permItemUrl(driveId, cfg){
+  return "https://graph.microsoft.com/v1.0/drives/"+driveId+"/root:/"+permEncodePath(permFolderSegments(cfg).concat([PERM_FILE]))+":/content";
 }
 
 function permLoad(){
+  var cfg = permGetConfig();
   return permGetToken(false).then(function(token){
-    return permResolveDrive(token).then(function(driveId){
-      return permGraphFetch(permItemUrl(driveId), token).then(function(r){
+    return permResolveDrive(token, cfg).then(function(driveId){
+      return permGraphFetch(permItemUrl(driveId, cfg), token).then(function(r){
         if(r.status === 404) throw new Error("not_found");
-        if(!r.ok) throw new Error("http_"+r.status);
         return r.json();
       });
     });
@@ -1660,15 +1707,13 @@ function permLoad(){
 }
 
 function permSave(){
+  var cfg = permGetConfig();
   return permGetToken(true).then(function(token){
-    return permResolveDrive(token).then(function(driveId){
+    return permResolveDrive(token, cfg).then(function(driveId){
       var body = JSON.stringify({ roles: PERM_ROLES, users: PERM_USERS, savedAt: new Date().toISOString(), savedBy: _msalEmail });
-      return permGraphFetch(permItemUrl(driveId), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
+      return permGraphFetch(permItemUrl(driveId, cfg), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
     });
-  }).then(function(r){
-    if(!r.ok) throw new Error("http_"+r.status);
-    return true;
-  });
+  }).then(function(){ return true; });
 }
 
 var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
@@ -1913,7 +1958,7 @@ function mgmtSaveAll(){
   }).catch(function(err){
     console.error("[perm] 儲存失敗", err);
     if(statusEl) statusEl.textContent = "儲存失敗，請再試一次";
-    alert("儲存失敗，請確認網路連線並再試一次。");
+    alert("儲存失敗：" + (err && err.message ? err.message : "請確認網路連線並再試一次。"));
   });
 }
 
