@@ -5965,15 +5965,13 @@ var DASH_SEASON_NEXT_FOLDER = null;
 var DASH_CAPACITY_SOURCES = [];
 
 function dashBuildCapacitySources(){
-  var list = [
+  var nextLabel = DASH_SEASON_NEXT ? dashSeasonTag(DASH_SEASON_NEXT,"下學期") : "下學期";
+  DASH_CAPACITY_SOURCES = [
     { branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") },
-    { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") }
+    { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") },
+    { branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:nextLabel },
+    { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:nextLabel }
   ];
-  if(DASH_SEASON_NEXT){
-    list.push({ branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:dashSeasonTag(DASH_SEASON_NEXT,"下學期") });
-    list.push({ branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:dashSeasonTag(DASH_SEASON_NEXT,"下學期") });
-  }
-  DASH_CAPACITY_SOURCES = list;
 }
 
 // 從學期行事曆算出「今天算哪個學期」，來更新 DASH_SEASON_CURRENT/NEXT（代碼，用於
@@ -6219,6 +6217,15 @@ function dashLoadCapacity(token){
   var results = [];
   DASH_CAPACITY_SOURCES.forEach(function(src){
     chain = chain.then(function(){
+      function placeholder(){
+        var rec = {
+          branch:src.branch, seasonLabel:src.seasonLabel, fileName:null, fileUrl:null,
+          rows: DASH_CAPACITY_CATEGORIES.map(function(cat){ return { category:cat, quota:null, enrolled:null, rate:null }; })
+        };
+        results.push(rec);
+        seasonGrids[src.seasonLabel].appendChild(dashRenderCapacityTable(rec));
+      }
+      if(!src.season){ placeholder(); return; }
       return dashResolveSiteAndDrive(token).then(function(){
         return dashResolveCapacityFolder(token, src.branch);
       }).then(function(folderId){
@@ -6234,15 +6241,7 @@ function dashLoadCapacity(token){
           seasonGrids[src.seasonLabel].appendChild(dashRenderCapacityTable(rec));
         });
       }).catch(function(e){
-        if(src.season===DASH_SEASON_NEXT && /找不到指定季度/.test((e && e.message) || "")){
-          var rec = {
-            branch:src.branch, seasonLabel:src.seasonLabel, fileName:null, fileUrl:null,
-            rows: DASH_CAPACITY_CATEGORIES.map(function(cat){ return { category:cat, quota:null, enrolled:null, rate:null }; })
-          };
-          results.push(rec);
-          seasonGrids[src.seasonLabel].appendChild(dashRenderCapacityTable(rec));
-          return;
-        }
+        if(src.season===DASH_SEASON_NEXT){ placeholder(); return; }
         throw e;
       });
     });
@@ -6257,8 +6256,14 @@ function dashLoadRenewal(token){
   var results = [];
   DASH_RENEWAL_SOURCES.forEach(function(src){
     chain = chain.then(function(){
+      function placeholder(){
+        var rec = { branch:src.branch, fileName:null, fileUrl:null, headers:[], rows:[], totalRate:null };
+        results.push(rec);
+        tablesEl.appendChild(dashRenderRenewalTable(rec));
+      }
+      if(!DASH_SEASON_NEXT_FOLDER){ placeholder(); return; }
       return dashResolveSiteAndDrive(token).then(function(){
-        return dashResolveRenewalFolder(token, src.branch, DASH_SEASON_CURRENT_FOLDER);
+        return dashResolveRenewalFolder(token, src.branch, DASH_SEASON_NEXT_FOLDER);
       }).then(function(folderId){
         return dashFindLatestFileInFolder(token, folderId, src.prefix);
       }).then(function(file){
@@ -6268,11 +6273,13 @@ function dashLoadRenewal(token){
           var rec = {
             branch:src.branch, fileName:file.name, fileUrl:file.webUrl,
             headers:table.headers, rows:table.rows,
-            totalRate: totalRow ? dashToPct(totalRow["續報率"]) : 0
+            totalRate: totalRow ? dashToPct(totalRow["續報率"]) : null
           };
           results.push(rec);
           tablesEl.appendChild(dashRenderRenewalTable(rec));
         });
+      }).catch(function(e){
+        placeholder();
       });
     });
   });
@@ -6393,10 +6400,8 @@ function dashRenderSummary(capacityResults, renewalResults){
       if(rate!=null){ rates.push(rate); }
       cards.push({ label:rec.branch+" "+g.seasonLabel+" 初階滿班率", value:(rate==null?"-":rate.toFixed(2)+"%"), cls:(rate==null?"":dashRateClass(rate)) });
     });
-    if(rates.length){
-      var a = avg(rates);
-      cards.push({ label:"平均 "+g.seasonLabel+" 初階滿班率", value:a.toFixed(2)+"%", cls:dashRateClass(a) });
-    }
+    var a = rates.length ? avg(rates) : null;
+    cards.push({ label:"平均 "+g.seasonLabel+" 初階滿班率", value:(a==null?"-":a.toFixed(2)+"%"), cls:(a==null?"":dashRateClass(a)) });
     return cards;
   }
   var currentCards = seasonGroups[0] ? buildSeasonCards(seasonGroups[0]) : [];
@@ -6404,14 +6409,12 @@ function dashRenderSummary(capacityResults, renewalResults){
   var renCards = [];
   var renRates = [];
   renewalResults.forEach(function(rec){
-    var rate = rec.totalRate||0;
-    renRates.push(rate);
-    renCards.push({ label:rec.branch+" 續報率", value:rate.toFixed(2)+"%", cls:dashRateClass(rate) });
+    var rate = (rec.totalRate==null) ? null : rec.totalRate;
+    if(rate!=null) renRates.push(rate);
+    renCards.push({ label:rec.branch+" 續報率", value:(rate==null?"-":rate.toFixed(2)+"%"), cls:(rate==null?"":dashRateClass(rate)) });
   });
-  if(renRates.length){
-    var renAvg = avg(renRates);
-    renCards.push({ label:"平均 續報率", value:renAvg.toFixed(2)+"%", cls:dashRateClass(renAvg) });
-  }
+  var renAvg = renRates.length ? avg(renRates) : null;
+  renCards.push({ label:"平均 續報率", value:(renAvg==null?"-":renAvg.toFixed(2)+"%"), cls:(renAvg==null?"":dashRateClass(renAvg)) });
   document.getElementById("dash-summary-capacity-current").innerHTML = currentCards.map(dashCardHtml).join("");
   document.getElementById("dash-summary-capacity-next").innerHTML = nextCards.map(dashCardHtml).join("");
   document.getElementById("dash-summary-renewal").innerHTML = renCards.map(dashCardHtml).join("");
