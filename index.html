@@ -796,6 +796,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   <div class="sr" id="dash-summary-capacity-current"></div>
   <div class="sr" id="dash-summary-capacity-next"></div>
   <div class="sr" id="dash-summary-renewal"></div>
+  <div class="sr" id="dash-summary-cpr"></div>
   <details class="dash-sec">
     <summary class="dash-sec-h">滿班率分析</summary>
     <div class="dash-sec-body" id="dash-capacity-tables"></div>
@@ -803,6 +804,10 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   <details class="dash-sec">
     <summary class="dash-sec-h">續報率分析</summary>
     <div class="dash-sec-body"><div style="display:grid;grid-template-columns:1fr;gap:16px" id="dash-renewal-tables"></div></div>
+  </details>
+  <details class="dash-sec">
+    <summary class="dash-sec-h">進度落後分析</summary>
+    <div class="dash-sec-body" id="dash-cpr-tables"></div>
   </details>
   <div id="dash-err" style="color:var(--rd);font-size:13px;margin-top:12px;white-space:pre-wrap"></div>
 </div>
@@ -5963,6 +5968,137 @@ var DASH_SEASON_CURRENT = "2026S2"; // 本學期（代碼）
 var DASH_SEASON_CURRENT_FOLDER = null; // 本學期的續報作業資料夾名（如 "2026秋季"），null 就用舊的「最新資料夾」判斷方式當作 fallback
 var DASH_SEASON_NEXT_FOLDER = null;
 var DASH_CAPACITY_SOURCES = [];
+var DASH_SEASON_CURRENT_ENTRY = null; // 本學期行事曆原始項目 {year,term}，CPR 檔名要用
+
+// ── 學員進度落後分析（讀取教學組網站的 CPR 檔案）──────────────────────
+var CPR_SITE_HOST = "lalaso.sharepoint.com";
+var CPR_SITE_PATH = "/sites/teaching";
+var CPR_LIBRARY   = "學員紀錄";
+var CPR_ROOT_FOLDER = "CPR";
+var CPR_SOURCES = [ { branch:"西屯" }, { branch:"北屯" } ];
+var CPR_CATEGORIES = [
+  { key:"親子A", sheet:"親子",  cls:"A" },
+  { key:"親子B", sheet:"親子",  cls:"B" },
+  { key:"幼兒C", sheet:"幼兒",  cls:"C" },
+  { key:"幼兒D", sheet:"幼兒",  cls:"D" },
+  { key:"兒童E", sheet:"兒童E", cls:"E" },
+  { key:"兒童F", sheet:"兒童F", cls:"F" }
+];
+var CPR_SHEETS = ["親子","幼兒","兒童E","兒童F"];
+var CPR_SNAPSHOT_FILE = "swim-crm-cpr-snapshots.json";
+var SEASON_TERM_SHORT = {1:"春", 2:"夏", 3:"秋"};
+var _cprSiteId = null, _cprDriveId = null;
+
+function cprFileName(branch, entry){
+  return "CPR " + entry.year + " S" + entry.term + "(" + SEASON_TERM_SHORT[entry.term] + ")" + branch + ".xlsx";
+}
+function cprResolveSiteAndDrive(token){
+  if(_cprSiteId && _cprDriveId) return Promise.resolve();
+  return dashGraphFetch("https://graph.microsoft.com/v1.0/sites/"+CPR_SITE_HOST+":"+CPR_SITE_PATH, token)
+    .then(function(site){
+      _cprSiteId = site.id;
+      return dashGraphFetch("https://graph.microsoft.com/v1.0/sites/"+_cprSiteId+"/drives", token);
+    })
+    .then(function(dl){
+      var lib = (dl.value||[]).filter(function(d){ return dashStrip(d.name)===dashStrip(CPR_LIBRARY); })[0];
+      if(!lib){
+        var names = (dl.value||[]).map(function(d){ return d.name; }).join("、");
+        throw new Error("找不到文件庫「"+CPR_LIBRARY+"」，這個網站實際的文件庫有："+names);
+      }
+      _cprDriveId = lib.id;
+    });
+}
+function cprListChildren(token, folderId){
+  var url = folderId
+    ? "https://graph.microsoft.com/v1.0/drives/"+_cprDriveId+"/items/"+folderId+"/children?$select=id,name,lastModifiedDateTime,webUrl&$top=200"
+    : "https://graph.microsoft.com/v1.0/drives/"+_cprDriveId+"/root/children?$select=id,name,lastModifiedDateTime,webUrl&$top=200";
+  return dashGraphFetch(url, token).then(function(d){ return d.value||[]; });
+}
+function cprResolveBranchFolder(token, branch){
+  return cprListChildren(token, null).then(function(rootItems){
+    var cprFolder = dashFindFolderByName(rootItems, CPR_ROOT_FOLDER);
+    return cprListChildren(token, cprFolder.id);
+  }).then(function(items){
+    return dashFindFolderByInclude(items, branch).id;
+  });
+}
+function cprFindFile(token, folderId, fileName){
+  return cprListChildren(token, folderId).then(function(list){
+    var hit = (list||[]).filter(function(f){ return f.name.trim()===fileName; })[0];
+    if(!hit){
+      var names = (list||[]).map(function(f){ return f.name; }).join("、");
+      throw new Error("找不到檔案「"+fileName+"」，這個資料夾實際的檔案有："+names);
+    }
+    return hit;
+  });
+}
+function cprReadSheetRows(token, itemId, sheetName){
+  var url = "https://graph.microsoft.com/v1.0/drives/"+_cprDriveId+"/items/"+itemId+
+    "/workbook/worksheets('"+encodeURIComponent(sheetName)+"')/range(address='D1:V1000')?$select=values";
+  return dashGraphFetch(url, token).then(function(d){ return d.values||[]; });
+}
+// values 每一列是 D~V 欄，index0=D(班級)、index2=F(姓名)、index18=V(進度落後)
+function cprCountCategory(values, clsLetter){
+  var total=0, behind=0;
+  (values||[]).forEach(function(row){
+    var cls = String((row && row[0]) || "").trim();
+    var name = String((row && row[2]) || "").trim();
+    if(!name) return;
+    if(clsLetter && cls!==clsLetter) return;
+    total++;
+    var flag = (row && row[18]!=null) ? String(row[18]).trim() : "";
+    if(flag==="進度落後") behind++;
+  });
+  return { total:total, behind:behind };
+}
+// 自訂「週三～週二」週期：每週三開會看的「本週」固定到下次開會才會往前推一週
+function cprPad2(n){ return (n<10?"0":"")+n; }
+function cprDateKey(d){ return d.getFullYear()+"-"+cprPad2(d.getMonth()+1)+"-"+cprPad2(d.getDate()); }
+function cprWeekLabel(bucket){
+  function md(d){ return (d.getMonth()+1)+"/"+d.getDate(); }
+  return md(bucket.start)+"~"+md(bucket.end);
+}
+function cprWeekBucket(startDate){
+  var start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  var end = new Date(start.getTime() + 6*86400000);
+  return { start:start, end:end, key:cprDateKey(start) };
+}
+function cprReportWeeks(){
+  var today = new Date();
+  var base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  var offset = (base.getDay()-3+7)%7;
+  var containingStart = new Date(base.getTime() - offset*86400000);
+  var thisWeekStart = new Date(containingStart.getTime() - 7*86400000);
+  var lastWeekStart = new Date(containingStart.getTime() - 14*86400000);
+  return { thisWeek:cprWeekBucket(thisWeekStart), lastWeek:cprWeekBucket(lastWeekStart) };
+}
+function cprSnapshotLoad(){
+  var cfg = permGetConfig();
+  return permGetToken(false).then(function(token){
+    return permResolveDrive(token, cfg).then(function(driveId){
+      return permGraphFetch(permItemUrl(driveId, cfg, CPR_SNAPSHOT_FILE), token).then(function(r){
+        if(r.status === 404) throw new Error("not_found");
+        return r.json();
+      });
+    });
+  }).then(function(data){
+    return (data && typeof data==="object") ? data : {};
+  }).catch(function(err){
+    console.warn("[cpr] 雲端週快照讀取失敗，暫用空白紀錄：", err && err.message);
+    return {};
+  });
+}
+function cprSnapshotSave(snapshots){
+  var cfg = permGetConfig();
+  return permGetToken(false).then(function(token){
+    return permResolveDrive(token, cfg).then(function(driveId){
+      var body = JSON.stringify(snapshots);
+      return permGraphFetch(permItemUrl(driveId, cfg, CPR_SNAPSHOT_FILE), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
+    });
+  }).catch(function(err){
+    console.warn("[cpr] 雲端週快照儲存失敗（不影響畫面顯示）：", err && err.message);
+  });
+}
 
 function dashBuildCapacitySources(){
   var nextLabel = DASH_SEASON_NEXT ? dashSeasonTag(DASH_SEASON_NEXT,"下學期") : "下學期";
@@ -5984,6 +6120,7 @@ function dashResolveSeason(){
       var next = seasonComputeNext(cur);
       DASH_SEASON_CURRENT = seasonEntryCode(cur);
       DASH_SEASON_CURRENT_FOLDER = seasonEntryFolderName(cur);
+      DASH_SEASON_CURRENT_ENTRY = { year:cur.year, term:cur.term };
       DASH_SEASON_NEXT = next ? seasonEntryCode(next) : null;
       DASH_SEASON_NEXT_FOLDER = next ? seasonEntryFolderName(next) : null;
     }
@@ -6170,18 +6307,33 @@ function dashRateTagClass(pctVal){
   if(pctVal>=80) return "t-am";
   return "t-rd";
 }
+// 進度落後率是「越低越好」，跟滿班率/續報率的門檻方向相反
+function dashBehindRateClass(pctVal){
+  if(pctVal<=10) return "c-tl";
+  if(pctVal<=20) return "c-am";
+  return "c-rd";
+}
+function dashBehindRateTagClass(pctVal){
+  if(pctVal<=10) return "t-tl";
+  if(pctVal<=20) return "t-am";
+  return "t-rd";
+}
+function dashBehindRateBadge(rate){
+  return "<span class='tag "+dashBehindRateTagClass(rate)+"'>"+rate.toFixed(2)+"%</span>";
+}
 
 function dashLoad(){
   document.getElementById("dash-err").textContent = "";
   document.getElementById("dash-summary-capacity-current").innerHTML = "<div class='sc'><div class='sl'>讀取中…</div></div>";
   document.getElementById("dash-summary-capacity-next").innerHTML = "";
   document.getElementById("dash-summary-renewal").innerHTML = "";
+  document.getElementById("dash-summary-cpr").innerHTML = "";
   var token;
   dashResolveSeason().then(function(){
     return dashGetToken();
   }).then(function(t){
     token = t;
-    return Promise.all([dashLoadCapacity(token), dashLoadRenewal(token)]);
+    return Promise.all([dashLoadCapacity(token), dashLoadRenewal(token), dashLoadCprSection(token)]);
   }).then(function(results){
     dashRenderSummary(results[0], results[1]);
     document.getElementById("dash-meta").textContent = "最後整理：" + new Date().toLocaleString("zh-TW");
@@ -6190,6 +6342,7 @@ function dashLoad(){
     document.getElementById("dash-summary-capacity-current").innerHTML = "";
     document.getElementById("dash-summary-capacity-next").innerHTML = "";
     document.getElementById("dash-summary-renewal").innerHTML = "";
+    document.getElementById("dash-summary-cpr").innerHTML = "";
   });
 }
 
@@ -6284,6 +6437,131 @@ function dashLoadRenewal(token){
     });
   });
   return chain.then(function(){ return results; });
+}
+
+function dashLoadCpr(token){
+  var results = [];
+  var chain = Promise.resolve();
+  CPR_SOURCES.forEach(function(src){
+    chain = chain.then(function(){
+      function placeholder(){
+        results.push({
+          branch: src.branch, fileName:null, fileUrl:null,
+          cats: CPR_CATEGORIES.map(function(c){ return { key:c.key, total:null, behind:null, rate:null }; })
+        });
+      }
+      if(!DASH_SEASON_CURRENT_ENTRY){ placeholder(); return; }
+      var fileName = cprFileName(src.branch, DASH_SEASON_CURRENT_ENTRY);
+      return cprResolveSiteAndDrive(token).then(function(){
+        return cprResolveBranchFolder(token, src.branch);
+      }).then(function(folderId){
+        return cprFindFile(token, folderId, fileName);
+      }).then(function(file){
+        var sheetRows = {};
+        var sheetChain = Promise.resolve();
+        CPR_SHEETS.forEach(function(sheetName){
+          sheetChain = sheetChain.then(function(){
+            return cprReadSheetRows(token, file.id, sheetName).then(function(values){ sheetRows[sheetName] = values; });
+          });
+        });
+        return sheetChain.then(function(){
+          var cats = CPR_CATEGORIES.map(function(cat){
+            var counts = cprCountCategory(sheetRows[cat.sheet]||[], cat.cls);
+            var rate = counts.total ? (counts.behind/counts.total*100) : null;
+            return { key:cat.key, total:counts.total, behind:counts.behind, rate:rate };
+          });
+          results.push({ branch:src.branch, fileName:file.name, fileUrl:file.webUrl, cats:cats });
+        });
+      }).catch(function(e){
+        console.warn("[cpr] "+src.branch+" 進度落後資料讀取失敗：", e && e.message);
+        placeholder();
+      });
+    });
+  });
+  return chain.then(function(){ return results; });
+}
+
+function dashLoadCprSection(token){
+  return dashLoadCpr(token).then(function(results){
+    return cprSnapshotLoad().then(function(snapshots){
+      var weeks = cprReportWeeks();
+      var snapshotData = {};
+      results.forEach(function(rec){
+        rec.cats.forEach(function(c){
+          snapshotData[rec.branch+"|"+c.key] = { total:c.total, behind:c.behind, rate:c.rate };
+        });
+      });
+      snapshots[weeks.thisWeek.key] = snapshotData;
+      cprSnapshotSave(snapshots);
+      var lastWeekMap = snapshots[weeks.lastWeek.key] || null;
+      dashRenderCpr(results, lastWeekMap, weeks);
+    });
+  }).catch(function(e){
+    console.warn("[cpr] 進度落後分析整理失敗：", e && e.message);
+  });
+}
+
+function dashRenderCpr(results, lastWeekMap, weeks){
+  var tablesEl = document.getElementById("dash-cpr-tables");
+  tablesEl.innerHTML = "";
+  var metaDiv = document.createElement("div");
+  metaDiv.style.cssText = "font-size:11px;color:var(--tx3);margin-bottom:10px";
+  metaDiv.textContent = "本週："+cprWeekLabel(weeks.thisWeek)+"　上週："+cprWeekLabel(weeks.lastWeek);
+  tablesEl.appendChild(metaDiv);
+  var grid = document.createElement("div");
+  grid.className = "dash-season-grid";
+  grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px";
+  results.forEach(function(rec){ grid.appendChild(dashRenderCprTable(rec, lastWeekMap)); });
+  tablesEl.appendChild(grid);
+  dashRenderCprSummary(results);
+}
+
+function dashRenderCprTable(rec, lastWeekMap){
+  var body = rec.cats.map(function(c){
+    var deltaHtml = "-";
+    if(lastWeekMap){
+      var prev = lastWeekMap[rec.branch+"|"+c.key];
+      if(prev && prev.rate!=null && c.rate!=null){
+        var diff = c.rate - prev.rate;
+        if(Math.abs(diff) < 0.005){
+          deltaHtml = "<span style='color:var(--tx3)'>持平</span>";
+        } else if(diff > 0){
+          deltaHtml = "<span style='color:var(--rd)'>▲"+diff.toFixed(2)+"%</span>";
+        } else {
+          deltaHtml = "<span style='color:var(--tl)'>▼"+Math.abs(diff).toFixed(2)+"%</span>";
+        }
+      }
+    }
+    return "<tr>"+
+      "<td>"+c.key+"</td>"+
+      "<td style='text-align:right'>"+(c.total==null?"-":c.total)+"</td>"+
+      "<td style='text-align:right'>"+(c.behind==null?"-":c.behind)+"</td>"+
+      "<td style='text-align:right'>"+(c.rate==null?"-":dashBehindRateBadge(c.rate))+"</td>"+
+      "<td style='text-align:right'>"+deltaHtml+"</td>"+
+      "</tr>";
+  }).join("");
+  var wrap = document.createElement("div");
+  wrap.innerHTML =
+    "<div class='tw dash-tbl'><table><thead><tr><th>"+rec.branch+"</th><th style='text-align:right'>學員數</th>"+
+    "<th style='text-align:right'>進度落後學員數</th><th style='text-align:right'>進度落後率</th><th style='text-align:right'>與上週比較</th></tr></thead>"+
+    "<tbody>"+(body || "<tr><td colspan='5' style='color:var(--rd)'>沒有讀到資料</td></tr>")+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--tx3);margin-top:6px'>"+dashSourceLine(rec)+"</div>";
+  return wrap;
+}
+
+function dashRenderCprSummary(results){
+  var cards = [];
+  var allRates = [];
+  function avg(list){ return list.length ? list.reduce(function(a,b){ return a+b; },0)/list.length : null; }
+  results.forEach(function(rec){
+    var rates = rec.cats.map(function(c){ return c.rate; }).filter(function(r){ return r!=null; });
+    rates.forEach(function(r){ allRates.push(r); });
+    var a = avg(rates);
+    cards.push({ label:rec.branch+" 平均進度落後率", value:(a==null?"-":a.toFixed(2)+"%"), cls:(a==null?"":dashBehindRateClass(a)) });
+  });
+  var overall = avg(allRates);
+  cards.push({ label:"平均 進度落後率", value:(overall==null?"-":overall.toFixed(2)+"%"), cls:(overall==null?"":dashBehindRateClass(overall)) });
+  document.getElementById("dash-summary-cpr").innerHTML = cards.map(dashCardHtml).join("");
 }
 
 function dashSourceLine(rec){
