@@ -212,7 +212,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
 .dup-entry.excluded{opacity:.45;text-decoration:line-through}
 .upload-drop{border:2px dashed var(--bd2);border-radius:var(--rl);padding:32px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sf)}
 .upload-drop:hover,.upload-drop.drag-over{border-color:var(--bl);background:var(--bl-bg)}
-.mgmt-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center}.mgmt-ov.open{display:flex}.mgmt-pn{background:var(--sf);border-radius:var(--rl);width:560px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2)}.mgmt-hd{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}.mgmt-bd{padding:20px;overflow-y:auto;flex:1}.mgmt-ft{padding:14px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}.usr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.usr-row:last-child{border-bottom:none}.usr-email{flex:1;font-family:monospace;font-size:12px;color:var(--tx2)}.usr-role-sel{height:30px;border:1px solid var(--bd2);border-radius:var(--r);padding:0 8px;font-size:12px;font-family:inherit;background:var(--sf);cursor:pointer}.perm-role-row{border:1px solid var(--bd);border-radius:var(--r);margin-bottom:8px;overflow:hidden}.perm-role-hd{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,0,0,.03)}.perm-role-name{flex:1;font-size:13px;font-weight:600;border:none;background:none;font-family:inherit;color:inherit;min-width:0}.perm-feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px}.perm-feat-chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2)}.app.authed{display:grid}
+.mgmt-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center}.mgmt-ov.open{display:flex}.mgmt-pn{background:var(--sf);border-radius:var(--rl);width:560px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2)}.mgmt-hd{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}.mgmt-bd{padding:20px;overflow-y:auto;flex:1}.mgmt-ft{padding:14px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}.usr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.usr-row:last-child{border-bottom:none}.usr-email{flex:1;font-family:monospace;font-size:12px;color:var(--tx2)}.usr-role-sel{height:30px;border:1px solid var(--bd2);border-radius:var(--r);padding:0 8px;font-size:12px;font-family:inherit;background:var(--sf);cursor:pointer}.perm-role-row{border:1px solid var(--bd);border-radius:var(--r);margin-bottom:8px;overflow:hidden}.perm-role-hd{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,0,0,.03)}.perm-role-name{flex:1;font-size:13px;font-weight:600;border:none;background:none;font-family:inherit;color:inherit;min-width:0}.perm-feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px}.perm-feat-chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2)}.seasoncal-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.seasoncal-row:last-child{border-bottom:none}.app.authed{display:grid}
 .formal-hall-btn{padding:5px 14px;border-radius:20px;border:1.5px solid var(--bd2);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;color:var(--tx2);transition:all .15s}
 .formal-hall-btn.active{background:var(--bl);border-color:var(--bl);color:#fff}
 .formal-vtab{padding:4px 12px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--sf);font-size:12px;cursor:pointer;color:var(--tx2)}
@@ -348,6 +348,29 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
     <div class="mgmt-ft">
       <button class="btn bs sm" onclick="document.getElementById('mgmt-ov').classList.remove('open')">關閉</button>
       <button class="btn bp sm" onclick="mgmtSaveAll()">儲存設定</button>
+    </div>
+  </div>
+</div>
+
+<div class="mgmt-ov" id="seasoncal-ov">
+  <div class="mgmt-pn" style="width:640px">
+    <div class="mgmt-hd">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M8 2v4M16 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span style="font-size:15px;font-weight:700">學期行事曆</span>
+      <span id="seasoncal-save-status" style="font-size:12px;color:var(--tx3);margin-left:4px"></span>
+      <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:18px" onclick="document.getElementById('seasoncal-ov').classList.remove('open')">×</button>
+    </div>
+    <div class="mgmt-bd">
+      <div class="al al-tl" style="margin-bottom:16px;font-size:12px">
+        <svg width="14" height="14" fill="none" viewBox="0 0 16 16" style="flex-shrink:0"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l2 2 3-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>設定每個學期的起訖日期，儀表板會自動根據今天的日期判斷「本學期」與「下學期」，不用再手動改程式碼。學期代碼固定為 S1=春季、S2=夏季、S3=秋季，一年三學期。</span>
+      </div>
+      <div id="seasoncal-list" style="margin-bottom:10px"></div>
+      <button class="btn bs sm" onclick="seasonCalAddRow()">新增學期</button>
+    </div>
+    <div class="mgmt-ft">
+      <button class="btn bs sm" onclick="document.getElementById('seasoncal-ov').classList.remove('open')">關閉</button>
+      <button class="btn bp sm" onclick="seasonCalSaveAll()">儲存設定</button>
     </div>
   </div>
 </div>
@@ -1681,15 +1704,15 @@ function permResolveDrive(token, cfg){
     });
 }
 
-function permItemUrl(driveId, cfg){
-  return "https://graph.microsoft.com/v1.0/drives/"+driveId+"/root:/"+permEncodePath(permFolderSegments(cfg).concat([PERM_FILE]))+":/content";
+function permItemUrl(driveId, cfg, filename){
+  return "https://graph.microsoft.com/v1.0/drives/"+driveId+"/root:/"+permEncodePath(permFolderSegments(cfg).concat([filename]))+":/content";
 }
 
 function permLoad(){
   var cfg = permGetConfig();
   return permGetToken(false).then(function(token){
     return permResolveDrive(token, cfg).then(function(driveId){
-      return permGraphFetch(permItemUrl(driveId, cfg), token).then(function(r){
+      return permGraphFetch(permItemUrl(driveId, cfg, PERM_FILE), token).then(function(r){
         if(r.status === 404) throw new Error("not_found");
         return r.json();
       });
@@ -1711,9 +1734,134 @@ function permSave(){
   return permGetToken(true).then(function(token){
     return permResolveDrive(token, cfg).then(function(driveId){
       var body = JSON.stringify({ roles: PERM_ROLES, users: PERM_USERS, savedAt: new Date().toISOString(), savedBy: _msalEmail });
-      return permGraphFetch(permItemUrl(driveId, cfg), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
+      return permGraphFetch(permItemUrl(driveId, cfg, PERM_FILE), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
     });
   }).then(function(){ return true; });
+}
+
+// ── Season calendar (admin-managed, cloud-persisted) ───────────────────────
+// Lets an admin define each term's start/end date so both the 滿班率 source
+// lookup (season-pinned filename) and the 續報作業 folder lookup (season-named
+// subfolder) can compute "本學期"/"下學期" from today's date, instead of a
+// hardcoded season string that needs a manual code edit every term, or a
+// "pick the newest-named folder" heuristic that breaks as soon as a future
+// term's folder exists (even empty) in SharePoint. Fixed mapping confirmed
+// by Kelvin: a year always has exactly 3 terms, S1=春季, S2=夏季, S3=秋季
+// (no winter term).
+var SEASON_CAL_FILE = "swim-crm-season-calendar.json";
+var SEASON_TERM_LABEL = {1:"春季", 2:"夏季", 3:"秋季"};
+var SEASON_CALENDAR = []; // [{year, term(1-3), start:"YYYY-MM-DD", end:"YYYY-MM-DD"}, ...]
+
+function seasonCalLoad(){
+  var cfg = permGetConfig();
+  return permGetToken(false).then(function(token){
+    return permResolveDrive(token, cfg).then(function(driveId){
+      return permGraphFetch(permItemUrl(driveId, cfg, SEASON_CAL_FILE), token).then(function(r){
+        if(r.status === 404) throw new Error("not_found");
+        return r.json();
+      });
+    });
+  }).then(function(data){
+    if(data && Array.isArray(data.terms)) SEASON_CALENDAR = data.terms;
+    else throw new Error("bad_shape");
+  }).catch(function(err){
+    console.warn("[season] 雲端學期行事曆讀取失敗或尚未設定，暫不套用：", err && err.message);
+  });
+}
+
+function seasonCalSave(){
+  var cfg = permGetConfig();
+  return permGetToken(true).then(function(token){
+    return permResolveDrive(token, cfg).then(function(driveId){
+      var body = JSON.stringify({ terms: SEASON_CALENDAR, savedAt: new Date().toISOString(), savedBy: _msalEmail });
+      return permGraphFetch(permItemUrl(driveId, cfg, SEASON_CAL_FILE), token, { method:"PUT", headers:{"Content-Type":"application/json"}, body: body });
+    });
+  }).then(function(){ return true; });
+}
+
+function seasonEntryCode(e){ return e ? (e.year + "S" + e.term) : null; }
+function seasonEntryFolderName(e){ return e ? (e.year + SEASON_TERM_LABEL[e.term]) : null; }
+
+function seasonComputeCurrent(date){
+  var t = date.getTime();
+  return (SEASON_CALENDAR||[]).filter(function(e){
+    var s = new Date(e.start+"T00:00:00").getTime();
+    var en = new Date(e.end+"T23:59:59").getTime();
+    return t>=s && t<=en;
+  })[0] || null;
+}
+
+function seasonComputeNext(currentEntry){
+  if(!currentEntry) return null;
+  var sorted = (SEASON_CALENDAR||[]).slice().sort(function(a,b){ return new Date(a.start)-new Date(b.start); });
+  var idx = -1;
+  for(var i=0;i<sorted.length;i++){ if(sorted[i].year===currentEntry.year && sorted[i].term===currentEntry.term){ idx=i; break; } }
+  return (idx>=0 && idx+1<sorted.length) ? sorted[idx+1] : null;
+}
+
+function seasonCalOpen(){
+  if(!((PERM_ROLES[_msalRole]||{}).manage)){ alert("僅限有帳號管理權限的角色使用"); return; }
+  seasonCalRender();
+  var st = document.getElementById("seasoncal-save-status");
+  if(st) st.textContent = "";
+  document.getElementById("seasoncal-ov").classList.add("open");
+}
+
+function seasonCalRender(){
+  var sorted = SEASON_CALENDAR.slice().sort(function(a,b){ return new Date(a.start)-new Date(b.start); });
+  var html = "";
+  if(!sorted.length){
+    html = "<div style='text-align:center;color:var(--tx3);padding:16px;font-size:13px'>尚未設定任何學期，請先新增</div>";
+  }
+  sorted.forEach(function(e){
+    var idx = SEASON_CALENDAR.indexOf(e);
+    html += "<div class='seasoncal-row' data-idx='"+idx+"'>";
+    html += "<input type='number' class='fi2' value='"+e.year+"' style='width:80px' onchange='seasonCalEdit(this,"+idx+",\"year\")'>";
+    html += "<select class='fse' style='width:90px' onchange='seasonCalEdit(this,"+idx+",\"term\")'>";
+    [1,2,3].forEach(function(t){ html += "<option value='"+t+"'"+(e.term===t?" selected":"")+">"+SEASON_TERM_LABEL[t]+"</option>"; });
+    html += "</select>";
+    html += "<input type='date' class='fi2' value='"+(e.start||"")+"' onchange='seasonCalEdit(this,"+idx+",\"start\")'>";
+    html += "<span style='color:var(--tx3)'>～</span>";
+    html += "<input type='date' class='fi2' value='"+(e.end||"")+"' onchange='seasonCalEdit(this,"+idx+",\"end\")'>";
+    html += "<button class='btn bg sm' style='font-size:11px;color:var(--rd)' data-idx='"+idx+"' onclick='seasonCalRemove(this)'>移除</button>";
+    html += "</div>";
+  });
+  document.getElementById("seasoncal-list").innerHTML = html;
+}
+
+function seasonCalEdit(el, idx, field){
+  var e = SEASON_CALENDAR[idx];
+  if(!e) return;
+  if(field === "year") e.year = parseInt(el.value, 10) || e.year;
+  else if(field === "term") e.term = parseInt(el.value, 10);
+  else e[field] = el.value;
+}
+
+function seasonCalRemove(btn){
+  var idx = parseInt(btn.dataset.idx, 10);
+  if(!confirm("確定移除這個學期？")) return;
+  SEASON_CALENDAR.splice(idx, 1);
+  seasonCalRender();
+}
+
+function seasonCalAddRow(){
+  var today = new Date();
+  SEASON_CALENDAR.push({ year: today.getFullYear(), term: 1, start: "", end: "" });
+  seasonCalRender();
+}
+
+function seasonCalSaveAll(){
+  var invalid = SEASON_CALENDAR.some(function(e){ return !e.start || !e.end; });
+  if(invalid){ alert("每個學期都要填起訖日期"); return; }
+  var statusEl = document.getElementById("seasoncal-save-status");
+  if(statusEl) statusEl.textContent = "儲存中…";
+  seasonCalSave().then(function(){
+    if(statusEl){ statusEl.textContent = "已儲存"; setTimeout(function(){ statusEl.textContent=""; }, 2500); }
+  }).catch(function(err){
+    console.error("[season] 儲存失敗", err);
+    if(statusEl) statusEl.textContent = "儲存失敗，請再試一次";
+    alert("儲存失敗：" + (err && err.message ? err.message : "請確認網路連線並再試一次。"));
+  });
 }
 
 var _msalApp, _msalRole="none", _msalEmail="", _msalName="";
@@ -1800,6 +1948,12 @@ function applyRoleUI(roleKey, email, name){
       spBtn.onclick = spCfgOpen;
       uArea.appendChild(spBtn);
     }
+    var seasonCalBtn = document.createElement("button");
+    seasonCalBtn.className = "btn bs sm";
+    seasonCalBtn.style.marginLeft = "4px";
+    seasonCalBtn.innerHTML = "&#128197; 學期行事曆";
+    seasonCalBtn.onclick = seasonCalOpen;
+    uArea.appendChild(seasonCalBtn);
   }
 
   PERM_FEATURES.forEach(function(f){
@@ -5802,14 +5956,42 @@ var DASH_SITE_PATH = "/sites/administration";
 var DASH_LIBRARY   = "學員資訊";
 var DASH_SCOPES    = ["Sites.Read.All"];
 function dashSeasonTag(season, label){ return label+"("+String(season).replace(/^20/,"")+")"; }
-var DASH_SEASON_NEXT = "2026S3";    // 下學期
-var DASH_SEASON_CURRENT = "2026S2"; // 本學期
-var DASH_CAPACITY_SOURCES = [
-  { branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") },
-  { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") },
-  { branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:dashSeasonTag(DASH_SEASON_NEXT,"下學期") },
-  { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:dashSeasonTag(DASH_SEASON_NEXT,"下學期") }
-];
+// 預設值（在學期行事曆尚未設定時當作 fallback）。正常情況下會在
+// dashResolveSeason() 裡被行事曆算出來的實際值覆蓋掉。
+var DASH_SEASON_NEXT = "2026S3";    // 下學期（代碼，如 2026S3）
+var DASH_SEASON_CURRENT = "2026S2"; // 本學期（代碼）
+var DASH_SEASON_CURRENT_FOLDER = null; // 本學期的續報作業資料夾名（如 "2026秋季"），null 就用舊的「最新資料夾」判斷方式當作 fallback
+var DASH_SEASON_NEXT_FOLDER = null;
+var DASH_CAPACITY_SOURCES = [];
+
+function dashBuildCapacitySources(){
+  var list = [
+    { branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") },
+    { branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_CURRENT, seasonLabel:dashSeasonTag(DASH_SEASON_CURRENT,"本學期") }
+  ];
+  if(DASH_SEASON_NEXT){
+    list.push({ branch:"西屯", prefix:"A01註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:dashSeasonTag(DASH_SEASON_NEXT,"下學期") });
+    list.push({ branch:"北屯", prefix:"A02註冊+劃位表", sheet:"空額一覽", range:"AF1:AV40", season:DASH_SEASON_NEXT, seasonLabel:dashSeasonTag(DASH_SEASON_NEXT,"下學期") });
+  }
+  DASH_CAPACITY_SOURCES = list;
+}
+
+// 從學期行事曆算出「今天算哪個學期」，來更新 DASH_SEASON_CURRENT/NEXT（代碼，用於
+// 满班率檔案名精準配對）與 DASH_SEASON_*_FOLDER（中文資料夾名，用於續報資料夾精準
+// 配對）。行事曆尚未設定或讀取失敗時，全部保持預設值不變。
+function dashResolveSeason(){
+  return seasonCalLoad().then(function(){
+    var cur = seasonComputeCurrent(new Date());
+    if(cur){
+      var next = seasonComputeNext(cur);
+      DASH_SEASON_CURRENT = seasonEntryCode(cur);
+      DASH_SEASON_CURRENT_FOLDER = seasonEntryFolderName(cur);
+      DASH_SEASON_NEXT = next ? seasonEntryCode(next) : null;
+      DASH_SEASON_NEXT_FOLDER = next ? seasonEntryFolderName(next) : null;
+    }
+  }).catch(function(){ /* 行事曆讀取失敗，維持預設值 */ })
+    .then(function(){ dashBuildCapacitySources(); });
+}
 var DASH_RENEWAL_SOURCES = [
   { branch:"西屯", prefix:"西屯未續報", sheet:"續報人數統計表", range:"A1:L10" },
   { branch:"北屯", prefix:"北屯未續報", sheet:"續報人數統計表", range:"A1:L10" }
@@ -5910,12 +6092,16 @@ function dashResolveCapacityFolder(token, branch){
   });
 }
 
-function dashResolveRenewalFolder(token, branch){
+function dashResolveRenewalFolder(token, branch, seasonFolderHint){
   return dashListChildren(token, null).then(function(rootItems){
     var baseFolder = dashFindFolderByName(rootItems, "續報作業");
     return dashListChildren(token, baseFolder.id);
   }).then(function(seasonItems){
-    var season = dashPickLatestSeasonFolder(seasonItems);
+    var season = null;
+    if(seasonFolderHint){
+      season = (seasonItems||[]).filter(function(f){ return dashStrip(f.name)===dashStrip(seasonFolderHint); })[0];
+    }
+    if(!season) season = dashPickLatestSeasonFolder(seasonItems);
     return dashListChildren(token, season.id);
   }).then(function(items){
     return dashFindFolderByInclude(items, branch).id;
@@ -5993,7 +6179,9 @@ function dashLoad(){
   document.getElementById("dash-summary-capacity-next").innerHTML = "";
   document.getElementById("dash-summary-renewal").innerHTML = "";
   var token;
-  dashGetToken().then(function(t){
+  dashResolveSeason().then(function(){
+    return dashGetToken();
+  }).then(function(t){
     token = t;
     return Promise.all([dashLoadCapacity(token), dashLoadRenewal(token)]);
   }).then(function(results){
@@ -6070,7 +6258,7 @@ function dashLoadRenewal(token){
   DASH_RENEWAL_SOURCES.forEach(function(src){
     chain = chain.then(function(){
       return dashResolveSiteAndDrive(token).then(function(){
-        return dashResolveRenewalFolder(token, src.branch);
+        return dashResolveRenewalFolder(token, src.branch, DASH_SEASON_CURRENT_FOLDER);
       }).then(function(folderId){
         return dashFindLatestFileInFolder(token, folderId, src.prefix);
       }).then(function(file){
