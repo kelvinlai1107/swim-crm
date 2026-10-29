@@ -6042,9 +6042,11 @@ function cprCountCategory(values, clsLetter){
   var total=0, behind=0;
   (values||[]).forEach(function(row){
     var cls = String((row && row[0]) || "").trim();
-    var name = String((row && row[2]) || "").trim();
-    if(!name) return;
     if(clsLetter && cls!==clsLetter) return;
+    // E 欄「家長」是判斷這格有沒有學員的欄位：空白或「-」代表這格是空的，
+    // 不能用 F 欄「姓名」判斷（姓名欄偶爾也會出現「-」，之前就是因此誤算）
+    var guardian = String((row && row[1]) || "").trim();
+    if(!guardian || guardian==="-") return;
     total++;
     var flag = (row && row[18]!=null) ? String(row[18]).trim() : "";
     if(flag==="進度落後") behind++;
