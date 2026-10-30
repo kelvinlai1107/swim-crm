@@ -797,6 +797,7 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   <div class="sr" id="dash-summary-capacity-next"></div>
   <div class="sr" id="dash-summary-renewal"></div>
   <div class="sr" id="dash-summary-cpr"></div>
+  <div class="sr" id="dash-summary-incident"></div>
   <details class="dash-sec">
     <summary class="dash-sec-h">滿班率分析</summary>
     <div class="dash-sec-body" id="dash-capacity-tables"></div>
@@ -808,6 +809,15 @@ tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
   <details class="dash-sec">
     <summary class="dash-sec-h">進度落後分析</summary>
     <div class="dash-sec-body" id="dash-cpr-tables"></div>
+  </details>
+  <details class="dash-sec">
+    <summary class="dash-sec-h">泳池受傷/溺水事件</summary>
+    <div class="dash-sec-body">
+      <details>
+        <summary style="cursor:pointer;font-size:12px;color:var(--tx3);margin-bottom:8px">展開查看歷年每月件數</summary>
+        <div id="dash-incident-history"></div>
+      </details>
+    </div>
   </details>
   <div id="dash-err" style="color:var(--rd);font-size:13px;margin-top:12px;white-space:pre-wrap"></div>
 </div>
@@ -5989,6 +5999,94 @@ var CPR_SNAPSHOT_FILE = "swim-crm-cpr-snapshots.json";
 var SEASON_TERM_SHORT = {1:"春", 2:"夏", 3:"秋"};
 var _cprSiteId = null, _cprDriveId = null;
 
+// ── 泳池受傷/溺水事件（同一個教學組「學員紀錄」文件庫底下的事件報告）──────
+var INCIDENT_PATH_FOLDERS = ["事件紀錄", "危安事件", "受傷&溺水事件"];
+var INCIDENT_SOURCES = [ { branch:"西屯" }, { branch:"北屯" } ];
+
+function incidentResolveBranchFolder(token, branch){
+  var chain = cprListChildren(token, null);
+  INCIDENT_PATH_FOLDERS.forEach(function(name){
+    chain = chain.then(function(items){
+      var f = dashFindFolderByName(items, name);
+      return cprListChildren(token, f.id);
+    });
+  });
+  return chain.then(function(items){
+    return dashFindFolderByInclude(items, branch).id;
+  });
+}
+// 年份資料夾命名："2026受傷溺水事件"
+function incidentListYearFolders(token, branchFolderId){
+  return cprListChildren(token, branchFolderId).then(function(items){
+    return (items||[])
+      .filter(function(f){ return /^\d{4}受傷溺水事件$/.test(String(f.name||"").trim()); })
+      .map(function(f){ return { id:f.id, year: parseInt(f.name, 10) }; });
+  });
+}
+// 季別資料夾命名："2026秋"（年+單字季別，跟 CPR 檔名的短季別一致）
+function incidentListSeasonFolders(token, yearFolderId){
+  return cprListChildren(token, yearFolderId).then(function(items){
+    return (items||[]).filter(function(f){ return /^\d{4}(春|夏|秋)$/.test(String(f.name||"").trim()); });
+  });
+}
+function incidentListFiles(token, seasonFolderId){
+  return cprListChildren(token, seasonFolderId).then(function(items){
+    return (items||[]).filter(function(f){
+      var n = String(f.name||"").toLowerCase();
+      return n.slice(-5)===".xlsx" || n.slice(-4)===".xls";
+    });
+  });
+}
+// 檔名裡第一組連續 6 碼數字就是事發日期 YYMMDD（例：261026 = 2026/10/26）
+function incidentParseDateFromName(name){
+  var m = String(name||"").match(/(\d{6})/);
+  if(!m) return null;
+  var s = m[1];
+  var yy = parseInt(s.slice(0,2), 10);
+  var mm = parseInt(s.slice(2,4), 10);
+  var dd = parseInt(s.slice(4,6), 10);
+  if(mm<1 || mm>12 || dd<1 || dd>31) return null;
+  return { year: 2000+yy, month: mm, day: dd };
+}
+function incidentLoadBranch(token, branch){
+  var incidents = [];
+  return incidentResolveBranchFolder(token, branch).then(function(branchFolderId){
+    return incidentListYearFolders(token, branchFolderId);
+  }).then(function(yearFolders){
+    var chain = Promise.resolve();
+    yearFolders.forEach(function(yf){
+      chain = chain.then(function(){
+        return incidentListSeasonFolders(token, yf.id);
+      }).then(function(seasonFolders){
+        var sChain = Promise.resolve();
+        seasonFolders.forEach(function(sf){
+          sChain = sChain.then(function(){
+            return incidentListFiles(token, sf.id);
+          }).then(function(files){
+            files.forEach(function(f){
+              var d = incidentParseDateFromName(f.name);
+              if(d){
+                incidents.push({ year:d.year, month:d.month, day:d.day, fileName:f.name, fileUrl:f.webUrl });
+              } else {
+                console.warn("[incident] 檔名解析不出日期，略過：", f.name);
+              }
+            });
+          });
+        });
+        return sChain;
+      });
+    });
+    return chain;
+  }).then(function(){
+    return { branch:branch, incidents:incidents };
+  }).catch(function(e){
+    console.warn("[incident] "+branch+" 受傷/溺水事件讀取失敗：", e && e.message);
+    return { branch:branch, incidents:[], error: e && e.message };
+  });
+}
+function incidentCountClass(n){ return n>0 ? "c-rd" : "c-tl"; }
+function incidentMonthKey(y, m){ return y + "-" + (m<10 ? "0"+m : m); }
+
 function cprFileName(branch, entry){
   return "CPR " + entry.year + " S" + entry.term + "(" + SEASON_TERM_SHORT[entry.term] + ")" + branch + ".xlsx";
 }
@@ -6330,12 +6428,13 @@ function dashLoad(){
   document.getElementById("dash-summary-capacity-next").innerHTML = "";
   document.getElementById("dash-summary-renewal").innerHTML = "";
   document.getElementById("dash-summary-cpr").innerHTML = "";
+  document.getElementById("dash-summary-incident").innerHTML = "";
   var token;
   dashResolveSeason().then(function(){
     return dashGetToken();
   }).then(function(t){
     token = t;
-    return Promise.all([dashLoadCapacity(token), dashLoadRenewal(token), dashLoadCprSection(token)]);
+    return Promise.all([dashLoadCapacity(token), dashLoadRenewal(token), dashLoadCprSection(token), dashLoadIncidentSection(token)]);
   }).then(function(results){
     dashRenderSummary(results[0], results[1]);
     document.getElementById("dash-meta").textContent = "最後整理：" + new Date().toLocaleString("zh-TW");
@@ -6345,6 +6444,7 @@ function dashLoad(){
     document.getElementById("dash-summary-capacity-next").innerHTML = "";
     document.getElementById("dash-summary-renewal").innerHTML = "";
     document.getElementById("dash-summary-cpr").innerHTML = "";
+    document.getElementById("dash-summary-incident").innerHTML = "";
   });
 }
 
@@ -6564,6 +6664,68 @@ function dashRenderCprSummary(results){
   var overall = avg(allRates);
   cards.push({ label:"平均 進度落後率", value:(overall==null?"-":overall.toFixed(2)+"%"), cls:(overall==null?"":dashBehindRateClass(overall)) });
   document.getElementById("dash-summary-cpr").innerHTML = cards.map(dashCardHtml).join("");
+}
+
+function dashLoadIncidentSection(token){
+  return cprResolveSiteAndDrive(token).then(function(){
+    var chain = Promise.resolve();
+    var results = [];
+    INCIDENT_SOURCES.forEach(function(src){
+      chain = chain.then(function(){
+        return incidentLoadBranch(token, src.branch).then(function(rec){ results.push(rec); });
+      });
+    });
+    return chain.then(function(){ return results; });
+  }).then(function(results){
+    dashRenderIncident(results);
+  }).catch(function(e){
+    console.warn("[incident] 受傷/溺水事件整理失敗：", e && e.message);
+  });
+}
+
+function dashRenderIncident(results){
+  var weeks = cprReportWeeks(); // 跟平均進度落後率同一套週三～週二週期規則
+  var now = new Date();
+  var curYear = now.getFullYear(), curMonth = now.getMonth()+1;
+
+  function inThisWeek(inc){
+    var t = new Date(inc.year, inc.month-1, inc.day).getTime();
+    return t >= weeks.thisWeek.start.getTime() && t <= weeks.thisWeek.end.getTime();
+  }
+
+  var cards = [];
+  results.forEach(function(rec){
+    var weekCount = rec.incidents.filter(inThisWeek).length;
+    var monthCount = rec.incidents.filter(function(inc){ return inc.year===curYear && inc.month===curMonth; }).length;
+    cards.push({ label:rec.branch+" 本週事件", value:String(weekCount), cls:incidentCountClass(weekCount) });
+    cards.push({ label:rec.branch+" 本月件數", value:String(monthCount), cls:incidentCountClass(monthCount) });
+  });
+  document.getElementById("dash-summary-incident").innerHTML = cards.map(dashCardHtml).join("");
+
+  var histEl = document.getElementById("dash-incident-history");
+  histEl.innerHTML = "";
+  var grid = document.createElement("div");
+  grid.className = "dash-season-grid";
+  grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px";
+  results.forEach(function(rec){ grid.appendChild(dashRenderIncidentHistoryTable(rec)); });
+  histEl.appendChild(grid);
+}
+
+function dashRenderIncidentHistoryTable(rec){
+  var byMonth = {};
+  rec.incidents.forEach(function(inc){
+    var key = incidentMonthKey(inc.year, inc.month);
+    byMonth[key] = (byMonth[key]||0) + 1;
+  });
+  var keys = Object.keys(byMonth).sort().reverse();
+  var body = keys.map(function(k){
+    return "<tr><td>"+k+"</td><td style='text-align:right'>"+byMonth[k]+"</td></tr>";
+  }).join("");
+  var wrap = document.createElement("div");
+  wrap.innerHTML =
+    "<div class='tw dash-tbl'><table><thead><tr><th>"+rec.branch+"</th><th style='text-align:right'>件數</th></tr></thead>"+
+    "<tbody>"+(body || "<tr><td colspan='2' style='color:var(--tx3)'>目前沒有紀錄</td></tr>")+"</tbody></table></div>";
+  return wrap;
 }
 
 function dashSourceLine(rec){
